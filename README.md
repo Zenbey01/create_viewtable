@@ -10,6 +10,44 @@ needs to be opened on the machine.
 > until user authentication, per-customer authorization, retention, and backup
 > policies are in place. The current UI has no user login.
 
+## Next steps
+
+Continue in this order before using real customer schemas or database
+credentials:
+
+1. **Decide the deployment boundary.** Choose whether the personal machine and
+   company machine will be separate Vercel projects and Cloudflare Tunnels, or
+   whether the company will provide a dedicated server. Keep each environment's
+   API token, tunnel, storage, and customer access separate.
+2. **Add user authentication and authorization.** Protect the Next.js app with
+   the organization's identity provider or another supported login method.
+   Authorize every schema operation on the server and scope data to the
+   authenticated customer/tenant. Do not rely on a hidden button or the shared
+   `API_TOKEN` to identify end users.
+3. **Choose durable, backed-up storage.** Replace the Go API's JSON file store
+   with a database suitable for the deployment. Add migrations, tenant-scoped
+   records, backup/restore procedures, and a retention/deletion policy.
+4. **Deploy one isolated environment.** Configure a Cloudflare Tunnel and
+   Access Service Auth policy for a machine that is approved to host the
+   connector. Set the server-only Vercel secrets, deploy, and verify that
+   unauthenticated requests are denied. Do not connect a company environment
+   through a personal computer.
+5. **Add database connectors only after approval.** Confirm which engines and
+   versions are needed, then implement their Go drivers and per-customer
+   connection configuration. Store credentials in a secret manager, use
+   dedicated read-only accounts, enforce TLS and network allowlists, and never
+   return credentials or query results to browser logs.
+6. **Test with synthetic data.** Verify tenant isolation, read-only behavior,
+   access revocation, tunnel outages, backup/restore, and credential rotation
+   before onboarding a customer. Do not use production customer data for these
+   tests.
+
+The current handoff point is **step 1**: the scaffold is pushed, but no real
+customer database connection, end-user login, tenant isolation, or production
+storage has been implemented. Complete steps 1–3 before collecting customer
+schema metadata, and complete all steps before connecting to a customer
+database.
+
 ## Run locally
 
 Create a random API token and set it in both terminals:
