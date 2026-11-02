@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQL View Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: a three-step workbench that reads left to right (tables, columns and joins, export), with the SQL always in view. */
+:root {
+  --bg: #eef3f5; --surface: #ffffff; --surface-2: #f5f8f9; --fg: #15232c; --muted: #566975; --line: #cfdae0;
+  --accent: #0b6580; --accent-soft: #dcedf2; --on-accent: #ffffff;
+  --warn: #8f4e00; --warn-soft: #fbeedb; --err: #a82a2a; --err-soft: #fae3e1; --ok: #1b6f47; --ok-soft: #dff2e8;
+  --code-bg: #122029; --code-fg: #d8e6ec; --code-key: #7fd0e6; --code-id: #f2c98a; --code-line: #2a3c47;
+  --sans: "IBM Plex Sans Thai", "Noto Sans Thai", "Thonburi", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f171c; --surface: #172229; --surface-2: #1d2a32; --fg: #e4edf1; --muted: #95a8b3; --line: #2d3e48;
+  --accent: #58c3df; --accent-soft: #173a46; --on-accent: #08242d;
+  --warn: #f1b866; --warn-soft: #3a2a12; --err: #f39a94; --err-soft: #3d1c1b; --ok: #71d6a1; --ok-soft: #14352a;
+  --code-bg: #0a1115; --code-fg: #d8e6ec; --code-key: #7fd0e6; --code-id: #f2c98a; --code-line: #24343e; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f171c; --surface: #172229; --surface-2: #1d2a32; --fg: #e4edf1; --muted: #95a8b3; --line: #2d3e48;
+  --accent: #58c3df; --accent-soft: #173a46; --on-accent: #08242d;
+  --warn: #f1b866; --warn-soft: #3a2a12; --err: #f39a94; --err-soft: #3d1c1b; --ok: #71d6a1; --ok-soft: #14352a;
+  --code-bg: #0a1115; --code-fg: #d8e6ec; --code-key: #7fd0e6; --code-id: #f2c98a; --code-line: #24343e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 400 14px/1.55 var(--sans); }
+.wrap { max-width: 1500px; margin: 0 auto; padding-block: 18px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+code, .mono { font-family: var(--mono); }
+
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.top h1 { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 600; }
+.top p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.top p.api-status { color: var(--err); }
+.source { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; min-width: 0; }
+label.field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
+input[type=text], input[type=search], select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; max-width: 100%; color: var(--fg); }
+#db-select { width: min(380px, 100%); }
+.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 11px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 500; }
+.btn.primary:hover { color: var(--on-accent); filter: brightness(1.08); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; text-decoration: underline; }
+
+.bench { display: grid; gap: 16px; grid-template-columns: minmax(210px, .62fr) minmax(0, 1.25fr) minmax(0, 1.3fr); align-items: start; }
+.pane { min-width: 0; display: grid; gap: 10px; }
+.pane > h2 { margin: 0; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.step { font: 500 12px/20px var(--mono); width: 20px; height: 20px; text-align: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); flex: none; }
+
+.tlist { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.tlist label { display: flex; gap: 8px; align-items: center; padding: 7px 10px; background: var(--surface); cursor: pointer; min-width: 0; }
+.tlist label:hover { background: var(--surface-2); }
+.tlist label.on { background: var(--accent-soft); }
+.tlist .nm { font: 400 13px var(--mono); overflow-wrap: anywhere; min-width: 0; flex: 1; }
+.tlist .ct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.empty { padding: 18px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); text-align: center; }
+
+.tcards { display: grid; gap: 12px; }
+.tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.thead { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.thead .nm { font: 500 14px var(--mono); overflow-wrap: anywhere; }
+.thead .as { color: var(--muted); font: 400 12px var(--mono); margin-left: 6px; }
+.tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.chip { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 7px; border-radius: 3px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.chip.base { background: var(--accent); color: var(--on-accent); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.err { background: var(--err-soft); color: var(--err); }
+
+.join { padding: 9px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); display: grid; gap: 7px; }
+.join .on-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font: 400 12px var(--mono); }
+.join select { font: 400 12px var(--mono); padding: 3px 5px; max-width: 100%; }
+.join .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.soft { display: flex; gap: 7px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.soft code { font-size: 12px; }
+
+.cols { display: grid; }
+.colrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 38%); gap: 8px; align-items: center; padding: 4px 12px; border-bottom: 1px solid var(--surface-2); }
+.colrow:last-child { border-bottom: 0; }
+.colrow label { display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: center; cursor: pointer; min-width: 0; }
+.colrow .cn { font: 400 13px var(--mono); overflow-wrap: anywhere; }
+.colrow .ty { font: 400 11px var(--mono); color: var(--muted); }
+.colrow input[type=text] { font: 400 12px var(--mono); padding: 3px 6px; width: 100%; }
+
+.exportbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: space-between; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 6px 11px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 500; }
+#view-name { font-family: var(--mono); width: 100%; }
+.codebox { background: var(--code-bg); border: 1px solid var(--code-line); border-radius: 6px; min-width: 0; }
+.codehead { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--code-line); color: var(--code-fg); font-size: 12px; }
+.codehead .btn { background: transparent; border-color: var(--code-line); color: var(--code-fg); }
+.codehead .btn:hover { border-color: var(--code-key); color: var(--code-key); }
+pre#sql { margin: 0; padding: 12px; overflow: auto; max-height: min(52vh, 560px); color: var(--code-fg); font: 400 12.5px/1.6 var(--mono); white-space: pre; }
+pre#sql .k { color: var(--code-key); font-weight: 500; }
+pre#sql .i { color: var(--code-id); }
+.notes { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.notes li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 6px 10px; border-radius: 4px; font-size: 12.5px; background: var(--surface); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.notes code { font-size: 12px; }
+details.ir { font-size: 12.5px; color: var(--muted); }
+details.ir summary { cursor: pointer; }
+details.ir pre { margin: 6px 0 0; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow: auto; max-height: 240px; font: 400 11.5px/1.5 var(--mono); color: var(--fg); }
+
+dialog { width: min(600px, calc(100vw - 32px)); background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+dialog::backdrop { background: rgba(8, 18, 24, .55); }
+dialog form { display: grid; gap: 12px; }
+dialog h2 { margin: 0; font-size: 17px; font-weight: 600; }
+dialog p { margin: 0; color: var(--muted); font-size: 13px; }
+dialog textarea { width: 100%; min-height: 170px; font: 400 12px/1.5 var(--mono); resize: vertical; }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.row2 input, .row2 select { width: 100%; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+#add-error { color: var(--err); font-size: 13px; }
+
+/* Large schemas: search, groups and related tables replace one long list, and cards collapse to a summary. */
+.tfilter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tfilter button { padding: 4px 2px; font-size: 12px; line-height: 1.3; }
+.tfilter b { display: block; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tscroll { overflow-y: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); min-height: 0; }
+.tscroll .tlist { border: 0; border-radius: 0; }
+.tlist .rowtext { flex: 1; min-width: 0; display: grid; }
+.tlist .hit { font: 400 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.grp { display: flex; gap: 8px; align-items: center; width: 100%; padding: 6px 10px; border: 0; background: var(--surface-2); cursor: pointer; text-align: left; font-weight: 500; font-size: 13px; }
+.grp:hover { color: var(--accent); }
+.grp .arrow { width: 10px; color: var(--muted); font-size: 10px; }
+.grp .gname { flex: 1; min-width: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+.grp .ct { color: var(--muted); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
+.grp .chip { background: var(--accent); color: var(--on-accent); }
+.hint { margin: 0; font-size: 12px; color: var(--muted); }
+.panehead { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: space-between; }
+.panehead h2 { margin: 0; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.cardtools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.thead .toggle { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
+.thead .arrow { color: var(--muted); font-size: 10px; width: 10px; }
+.thead .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.summary { padding: 7px 12px 9px; display: grid; gap: 5px; font-size: 12px; min-width: 0; }
+.summary .sql { font: 400 11.5px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.summary .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.summary .picked { background: var(--accent-soft); color: var(--fg); font-family: var(--mono); white-space: normal; overflow-wrap: anywhere; }
+.colfilter { padding: 7px 12px; border-bottom: 1px solid var(--line); }
+.colfilter input { width: 100%; font-size: 12.5px; padding: 4px 7px; }
+.cols.long { max-height: 330px; overflow-y: auto; }
+@media (min-width: 1121px) {
+  .bench { height: max(540px, calc(100vh - 128px)); align-items: stretch; }
+  .pane { min-height: 0; align-content: start; }
+  .pane.tables { grid-template-rows: auto auto auto minmax(0, 1fr) auto; align-content: stretch; }
+  .pane.tables .tscroll { max-height: none; }
+  .pane.cards { grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
+  .pane.cards .tcards { overflow-y: auto; min-height: 0; align-content: start; padding-right: 2px; }
+  .pane.out { overflow-y: auto; }
+}
+@media (max-width: 720px) { .tscroll { max-height: 45vh; } }
+@media (max-width: 1120px) {
+  .bench { grid-template-columns: minmax(190px, .55fr) minmax(0, 1.45fr); }
+  .out { grid-column: 1 / -1; position: static; }
+}
+@media (max-width: 720px) {
+  .bench { grid-template-columns: minmax(0, 1fr); }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>SQL View Builder</h1>
+      <p>ต้นแบบ: เลือกตารางและคอลัมน์ แล้วได้คำสั่งสร้าง view โดยไม่เชื่อมหรือรันอะไรบนฐานข้อมูลจริง</p>
+      <p class="api-status" id="api-status" role="status" aria-live="polite" hidden></p>
+    </div>
+    <div class="source">
+      <label class="field" for="db-select">ฐานกลาง
+        <select id="db-select"></select>
+      </label>
+      <button class="btn" id="add-db" type="button">+ เพิ่มฐานกลาง</button>
+      <button class="btn" id="remove-db" type="button" hidden>ลบฐานนี้</button>
+    </div>
+  </header>
+
+  <main class="bench">
+    <section class="pane tables" aria-labelledby="h-tables">
+      <h2 id="h-tables"><span class="step">1</span>เลือกตาราง</h2>
+      <input type="search" id="table-search" placeholder="ค้นหาตารางหรือคอลัมน์ ( / )" aria-label="ค้นหาตารางหรือคอลัมน์" spellcheck="false">
+      <div class="seg tfilter" id="table-filter" role="group" aria-label="ตารางที่แสดง"></div>
+      <div class="tscroll" id="table-scroll"><div class="tlist" id="table-list"></div></div>
+      <p class="hint" id="table-hint"></p>
+    </section>
+
+    <section class="pane cards" aria-labelledby="h-cols">
+      <div class="panehead">
+        <h2 id="h-cols"><span class="step">2</span>เลือกคอลัมน์และตรวจ JOIN</h2>
+        <div class="cardtools" id="card-tools"></div>
+      </div>
+      <div class="tcards" id="table-cards"></div>
+    </section>
+
+    <section class="pane out" aria-labelledby="h-out">
+      <h2 id="h-out"><span class="step">3</span>ส่งออก</h2>
+      <div class="exportbar">
+        <label class="field" for="view-name" style="flex: 1 1 180px">ชื่อ view
+          <input type="text" id="view-name" spellcheck="false">
+        </label>
+        <div class="seg" id="targets" role="group" aria-label="ฐานข้อมูลปลายทาง"></div>
+      </div>
+      <div class="codebox">
+        <div class="codehead"><span id="code-label"></span><button class="btn small" id="copy" type="button">คัดลอก SQL</button></div>
+        <pre id="sql" tabindex="0"></pre>
+      </div>
+      <ul class="notes" id="notes"></ul>
+      <details class="ir">
+        <summary>ดูโครงสร้างกลางที่ใช้แปลงเป็น SQL แต่ละฐาน</summary>
+        <pre id="ir"></pre>
+      </details>
+    </section>
+  </main>
+</div>
+
+<dialog id="add-dialog" aria-labelledby="add-title">
+  <form id="add-form" method="dialog">
+    <h2 id="add-title">เพิ่มฐานกลาง</h2>
+    <p>รับเฉพาะโครงสร้างตาราง วางคำสั่ง CREATE TABLE จากผลของ <code>mysqldump --no-data</code> หรือ <code>pg_dump --schema-only</code> ได้เลย ห้ามใส่รหัสผ่านหรือข้อมูลจริง schema ที่เพิ่มจะถูกจัดเก็บโดย Go API</p>
+    <div class="row2">
+      <label class="field" for="add-name">ชื่อฐาน
+        <input type="text" id="add-name" required spellcheck="false" placeholder="เช่น module_finance">
+      </label>
+      <label class="field" for="add-engine">ระบบฐานข้อมูล
+        <select id="add-engine">
+          <option value="mysql">MySQL</option>
+          <option value="postgres">PostgreSQL</option>
+          <option value="sqlserver">SQL Server</option>
+        </select>
+      </label>
+    </div>
+    <label class="field" for="add-ddl">โครงสร้างตาราง
+      <textarea id="add-ddl" required spellcheck="false" placeholder="CREATE TABLE invoices (&#10;  id BIGINT PRIMARY KEY,&#10;  customer_id BIGINT,&#10;  amount DECIMAL(10,2),&#10;  FOREIGN KEY (customer_id) REFERENCES customers(id)&#10;);"></textarea>
+    </label>
+    <div id="add-error" role="alert" hidden></div>
+    <div class="actions">
+      <button class="btn" type="button" id="add-cancel">ยกเลิก</button>
+      <button class="btn primary" type="submit">เพิ่มฐานกลาง</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ---------- Sample schemas (example data, not a real database) ---------- */
+function T(...defs) {
+  return { pk: 'id', columns: defs.map(d => {
+    const [left, fk] = d.split(' -> ');
+    const [name, ...type] = left.split(' ');
+    const col = { name, type: type.join(' ') };
+    if (fk) { const [table, column] = fk.split('.'); col.fk = { table, column }; }
+    return col;
+  }) };
+}
+const SAMPLE_DBS = [
+  { id: 'course_platform', name: 'course_platform', engine: 'mysql', sample: true, viewName: 'v_course_enrollments', tables: {
+    users: T('id bigint', 'name varchar(255)', 'email varchar(255)', 'phone varchar(20)', 'created_at timestamp', 'deleted_at timestamp'),
+    categories: T('id bigint', 'name varchar(120)'),
+    courses: T('id bigint', 'title varchar(255)', 'instructor_id bigint -> users.id', 'category_id bigint', 'price decimal(10,2)', 'published_at timestamp', 'deleted_at timestamp'),
+    lessons: T('id bigint', 'course_id bigint', 'title varchar(255)', 'position int'),
+    enrollments: T('id bigint', 'user_id bigint', 'course_id bigint', 'status varchar(20)', 'progress_percent tinyint', 'enrolled_at timestamp', 'deleted_at timestamp'),
+    lesson_progress: T('id bigint', 'enrollment_id bigint', 'lesson_id bigint', 'completed_at timestamp'),
+    payments: T('id bigint', 'enrollment_id bigint -> enrollments.id', 'amount decimal(10,2)', 'method varchar(20)', 'status varchar(20)', 'paid_at timestamp', 'deleted_at timestamp'),
+  } },
+  { id: 'office_hr', name: 'office_hr', engine: 'postgres', sample: true, viewName: 'v_leave_requests', tables: {
+    departments: T('id bigint', 'name text'),
+    employees: T('id bigint', 'full_name text', 'email text', 'department_id bigint -> departments.id', 'hired_on date'),
+    leave_requests: T('id bigint', 'employee_id bigint -> employees.id', 'leave_type text', 'start_date date', 'end_date date', 'status text'),
+  } },
+];
+/* Example schema with 247 generated tables, to exercise the page at the size of a real system. */
+function buildLargeDemo() {
+  const modules = ['course', 'user', 'payment', 'invoice', 'employee', 'customer', 'product', 'order', 'campaign', 'ticket', 'report', 'vendor', 'asset'];
+  const children = ['categories', 'items', 'logs', 'settings', 'attachments', 'comments', 'tags', 'approvals', 'histories', 'notes', 'reviews', 'templates', 'schedules', 'assignments', 'notifications', 'imports', 'exports', 'versions'];
+  const extras = {
+    users: ['email varchar(255)', 'phone varchar(20)'],
+    customers: ['email varchar(255)', 'phone varchar(20)'],
+    employees: ['email varchar(255)', 'user_id bigint'],
+    orders: ['customer_id bigint', 'product_id bigint', 'total_amount decimal(12,2)'],
+    invoices: ['order_id bigint', 'customer_id bigint', 'total_amount decimal(12,2)', 'due_date date'],
+    payments: ['invoice_id bigint -> invoices.id', 'amount decimal(12,2)', 'paid_at timestamp'],
+    tickets: ['customer_id bigint', 'employee_id bigint'],
+    courses: ['employee_id bigint', 'price decimal(10,2)'],
+  };
+  const tables = {};
+  modules.forEach(m => {
+    const root = m + 's';
+    tables[root] = T('id bigint', 'code varchar(40)', 'name varchar(255)', 'status varchar(20)', ...(extras[root] || []), 'created_at timestamp', 'updated_at timestamp', 'deleted_at timestamp');
+    children.forEach((c, i) => {
+      const owner = i % 3 === 0 && m !== 'user' ? ['user_id bigint'] : [];
+      tables[m + '_' + c] = T('id bigint', m + '_id bigint', 'title varchar(255)', 'status varchar(20)', 'note text', ...owner, 'created_at timestamp', 'deleted_at timestamp');
+    });
+  });
+  return { id: 'erp_demo', name: 'erp_demo', engine: 'mysql', sample: true, viewName: 'v_order_payments', tables };
+}
+SAMPLE_DBS.unshift(buildLargeDemo());
+const DEFAULT_SELECTIONS = {
+  erp_demo: { order: ['orders', 'customers', 'invoices', 'payments'], joinTypes: { invoices: 'LEFT', payments: 'LEFT' }, cols: {
+    orders: ['code', 'status', 'total_amount'], customers: ['name', 'email'], invoices: ['due_date', 'total_amount'], payments: ['amount', 'paid_at'] } },
+  course_platform: { order: ['enrollments', 'users', 'courses', 'payments'], joinTypes: { payments: 'LEFT' }, cols: {
+    enrollments: ['status', 'enrolled_at'], users: ['name', 'email'], courses: ['title'], payments: ['amount', 'status'] } },
+  office_hr: { order: ['leave_requests', 'employees', 'departments'], joinTypes: {}, cols: {
+    leave_requests: ['leave_type', 'start_date', 'end_date', 'status'], employees: ['full_name'], departments: ['name'] } },
+};
+
+/* ---------- Dialect adapters: add a database by adding an entry here ---------- */
+const ADAPTERS = {
+  mysql: { label: 'MySQL', quote: n => '`' + n.replace(/`/g, '``') + '`', create: 'CREATE OR REPLACE VIEW', note: null },
+  postgres: { label: 'PostgreSQL', quote: n => '"' + n.replace(/"/g, '""') + '"', create: 'CREATE OR REPLACE VIEW',
+    note: 'คำสั่งนี้เพิ่มคอลัมน์ต่อท้าย view เดิมได้เท่านั้น ถ้าจะเปลี่ยนชื่อ ลบ หรือสลับลำดับคอลัมน์ ต้อง <code>DROP VIEW</code> ก่อน' },
+  sqlserver: { label: 'SQL Server', quote: n => '[' + n.replace(/\]/g, ']]') + ']', create: 'CREATE OR ALTER VIEW',
+    note: '<code>CREATE OR ALTER VIEW</code> ใช้ได้ตั้งแต่ SQL Server 2016 SP1 และต้องเป็นคำสั่งแรกของ batch' },
+};
+
+/* ---------- State ---------- */
+const dbs = [...SAMPLE_DBS];
+const state = { dbId: 'course_platform', target: 'mysql', search: '', viewName: '', order: [], base: null, cols: {}, aliases: {}, joinTypes: {}, overrides: {}, softOff: {}, tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} };
+
+function currentDb() { return dbs.find(d => d.id === state.dbId) || dbs[0]; }
+function loadDb(id) {
+  const db = dbs.find(d => d.id === id) || dbs[0];
+  const pick = DEFAULT_SELECTIONS[db.id] || { order: [], joinTypes: {}, cols: {} };
+  Object.assign(state, { dbId: db.id, target: db.engine, search: '', viewName: db.viewName || 'v_new_view',
+    order: [...pick.order], base: pick.order[0] || null, joinTypes: { ...pick.joinTypes }, aliases: {}, overrides: {}, softOff: {}, cols: {},
+    tableFilter: 'all', openGroups: new Set(), collapsed: new Set(pick.order.length > 3 ? pick.order.slice(2) : []), colSearch: {} });
+  for (const t of pick.order) state.cols[t] = new Set(pick.cols[t] || []);
+}
+
+/* ---------- Schema helpers ---------- */
+function pkOf(table) { return table.pk || (table.columns[0] && table.columns[0].name); }
+function singular(t) {
+  if (/ies$/.test(t)) return t.slice(0, -3) + 'y';
+  if (/(ch|sh|x|ss)es$/.test(t)) return t.slice(0, -2);
+  if (/s$/.test(t) && !/ss$/.test(t)) return t.slice(0, -1);
+  return t;
+}
+function guessTargets(stem) { return [stem + 's', stem + 'es', stem.replace(/y$/, 'ies'), stem]; }
+
+const edgeCache = new WeakMap();
+function findEdges(db) {
+  if (edgeCache.has(db)) return edgeCache.get(db);
+  const edges = [];
+  for (const [t, def] of Object.entries(db.tables)) {
+    for (const c of def.columns) {
+      if (c.fk) {
+        if (db.tables[c.fk.table] && c.fk.table !== t) edges.push({ from: t, fromCol: c.name, to: c.fk.table, toCol: c.fk.column, source: 'fk' });
+      } else if (/_id$/.test(c.name)) {
+        const target = guessTargets(c.name.slice(0, -3)).find(x => x !== t && db.tables[x]);
+        if (target) edges.push({ from: t, fromCol: c.name, to: target, toCol: pkOf(db.tables[target]), source: 'guess' });
+      }
+    }
+  }
+  edgeCache.set(db, edges);
+  return edges;
+}
+
+function tableAliases(order) {
+  const used = new Set(), out = {};
+  for (const t of order) {
+    const base = t.split('_').filter(Boolean).map(w => w[0]).join('').toLowerCase() || 't';
+    let a = base, n = 2;
+    while (used.has(a)) a = base + n++;
+    used.add(a); out[t] = a;
+  }
+  return out;
+}
+
+/* Walks outward from the base table. Tables with no route stay unresolved and offer a bridge through other tables. */
+function resolveJoins(db) {
+  const edges = findEdges(db), joined = [state.base], joins = [];
+  let pending = state.order.filter(t => t !== state.base), progress = true;
+  while (progress && pending.length) {
+    progress = false;
+    for (const t of pending) {
+      const ov = state.overrides[t];
+      let j = null;
+      if (ov && state.order.includes(ov.leftTable)) {
+        if (joined.includes(ov.leftTable)) j = { table: t, leftTable: ov.leftTable, leftCol: ov.leftCol, rightCol: ov.rightCol, source: 'custom' };
+      } else {
+        const hits = edges.filter(e => (e.from === t && joined.includes(e.to)) || (e.to === t && joined.includes(e.from)));
+        /* Prefer the route that keeps one row per row (a joined table points at this one), then declared keys over guesses. */
+        const rank = e => (e.to === t ? 0 : 2) + (e.source === 'fk' ? 0 : 1);
+        hits.sort((a, b) => rank(a) - rank(b));
+        const e = hits[0];
+        if (e) j = e.from === t
+          ? { table: t, leftTable: e.to, leftCol: e.toCol, rightCol: e.fromCol, source: e.source, routes: hits.length }
+          : { table: t, leftTable: e.from, leftCol: e.fromCol, rightCol: e.toCol, source: e.source, routes: hits.length };
+      }
+      if (j) {
+        j.type = state.joinTypes[t] || 'INNER';
+        j.fanOut = j.rightCol !== pkOf(db.tables[t]);
+        joins.push(j); joined.push(t);
+        pending = pending.filter(x => x !== t);
+        progress = true;
+        break;
+      }
+    }
+  }
+  const unresolved = pending.map(t => ({ table: t, bridge: findBridge(edges, joined, t) }));
+  return { joins, unresolved };
+}
+
+function findBridge(edges, joined, target) {
+  const queue = joined.map(t => [t]), seen = new Set(joined);
+  while (queue.length) {
+    const path = queue.shift(), at = path[path.length - 1];
+    for (const e of edges) {
+      const next = e.from === at ? e.to : e.to === at ? e.from : null;
+      if (!next || seen.has(next)) continue;
+      if (next === target) return path.slice(1);
+      seen.add(next);
+      queue.push([...path, next]);
+    }
+  }
+  return null;
+}
+
+/* ---------- Intermediate model: everything the user chose, independent of any database ---------- */
+function hasSoftDelete(db, t) { return db.tables[t].columns.some(c => c.name === 'deleted_at'); }
+function softActive(db, t) { return hasSoftDelete(db, t) && !state.softOff[t]; }
+
+function selectedColumns(db) {
+  const list = [];
+  for (const t of state.order) for (const c of db.tables[t].columns) if (state.cols[t] && state.cols[t].has(c.name)) list.push({ table: t, column: c.name });
+  const counts = {};
+  for (const x of list) counts[x.column] = (counts[x.column] || 0) + 1;
+  for (const x of list) {
+    x.auto = counts[x.column] > 1 ? singular(x.table) + '_' + x.column : x.column;
+    x.as = (state.aliases[x.table + '.' + x.column] || '').trim() || x.auto;
+  }
+  return list;
+}
+
+function buildModel() {
+  const db = currentDb(), errors = [], warnings = [];
+  if (!state.order.length) return { model: null, errors: ['เลือกอย่างน้อย 1 ตารางจากขั้นตอนที่ 1'], warnings, joins: [], unresolved: [] };
+  const aliases = tableAliases(state.order), { joins, unresolved } = resolveJoins(db), columns = selectedColumns(db);
+
+  if (!state.viewName.trim()) errors.push('ตั้งชื่อ view ก่อนส่งออก');
+  if (!columns.length) errors.push('เลือกอย่างน้อย 1 คอลัมน์');
+  for (const u of unresolved) errors.push(`ตาราง <code>${esc(u.table)}</code> ยังไม่มีเงื่อนไข JOIN กับตารางอื่น`);
+  const seen = {};
+  for (const c of columns) seen[c.as] = (seen[c.as] || 0) + 1;
+  for (const [name, n] of Object.entries(seen)) if (n > 1) errors.push(`มีคอลัมน์ผลลัพธ์ชื่อ <code>${esc(name)}</code> ซ้ำกัน ${n} คอลัมน์ ต้องเปลี่ยน alias`);
+
+  for (const j of joins) {
+    if (j.routes > 1) warnings.push(`<code>${esc(j.table)}</code> เชื่อมได้ ${j.routes} ทาง ระบบเลือก <code>${esc(j.leftTable)}.${esc(j.leftCol)}</code> ควรตรวจว่าตรงกับความหมายที่ต้องการ`);
+    if (j.source === 'guess') warnings.push(`JOIN ของ <code>${esc(j.table)}</code> เดาจากชื่อคอลัมน์ ควรตรวจว่าถูกต้อง`);
+    if (j.fanOut) warnings.push(`<code>${esc(j.leftTable)}</code> หนึ่งแถวอาจตรงกับ <code>${esc(j.table)}</code> หลายแถว จำนวนแถวของ view อาจเพิ่มขึ้นและยอดรวมอาจซ้ำ`);
+  }
+  const pii = columns.filter(c => PII.test(c.column));
+  if (pii.length) warnings.push(`มีข้อมูลส่วนบุคคลใน view: ${pii.map(c => `<code>${esc(c.table)}.${esc(c.column)}</code>`).join(', ')} ควรจำกัดสิทธิ์ผู้ที่อ่าน view นี้ได้`);
+  if (state.viewName.trim().length > 63) warnings.push('ชื่อ view ยาวเกิน 63 ตัวอักษร PostgreSQL จะตัดชื่อให้สั้นลง และ MySQL รับได้ไม่เกิน 64 ตัวอักษร');
+
+  const where = [];
+  if (softActive(db, state.base)) where.push({ alias: aliases[state.base], column: 'deleted_at' });
+  const modelJoins = joins.map(j => {
+    const on = [];
+    if (softActive(db, j.table)) {
+      /* A LEFT JOIN filter belongs in ON. In WHERE it would drop unmatched rows and act like an INNER JOIN. */
+      if (j.type === 'LEFT') on.push({ alias: aliases[j.table], column: 'deleted_at' });
+      else where.push({ alias: aliases[j.table], column: 'deleted_at' });
+    }
+    return { type: j.type, table: j.table, alias: aliases[j.table],
+      left: { alias: aliases[j.leftTable], column: j.leftCol }, right: { alias: aliases[j.table], column: j.rightCol }, notDeleted: on };
+  });
+  const model = { view: state.viewName.trim(), from: { table: state.base, alias: aliases[state.base] },
+    columns: columns.map(c => ({ alias: aliases[c.table], column: c.column, as: c.as })), joins: modelJoins, notDeleted: where };
+  return { model, errors, warnings, joins, unresolved };
+}
+
+function renderSql(model, key) {
+  const a = ADAPTERS[key], q = a.quote, ref = (al, col) => `${q(al)}.${q(col)}`;
+  const lines = [`${a.create} ${q(model.view)} AS`, 'SELECT'];
+  model.columns.forEach((c, i) => lines.push(`  ${ref(c.alias, c.column)} AS ${q(c.as)}${i < model.columns.length - 1 ? ',' : ''}`));
+  lines.push(`FROM ${q(model.from.table)} AS ${q(model.from.alias)}`);
+  for (const j of model.joins) {
+    lines.push(`${j.type} JOIN ${q(j.table)} AS ${q(j.alias)}`);
+    lines.push(`  ON ${ref(j.right.alias, j.right.column)} = ${ref(j.left.alias, j.left.column)}`);
+    for (const n of j.notDeleted) lines.push(`  AND ${ref(n.alias, n.column)} IS NULL`);
+  }
+  model.notDeleted.forEach((n, i) => lines.push(`${i ? '  AND' : 'WHERE'} ${ref(n.alias, n.column)} IS NULL`));
+  return lines.join('\n') + ';';
+}
+
+/* ---------- DDL parser for "add a central database" ---------- */
+function cleanId(s) { return s.trim().split('.').pop().replace(/[`"\[\]]/g, ''); }
+function parseDDL(text) {
+  const src = text.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const tables = {}, re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(/gi;
+  let m;
+  while ((m = re.exec(src))) {
+    const name = cleanId(m[1]), parts = [];
+    let i = re.lastIndex, depth = 1, quote = null, start = i;
+    for (; i < src.length && depth > 0; i++) {
+      const ch = src[i];
+      if (quote) { if (ch === quote) quote = null; continue; }
+      if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue; }
+      if (ch === '[') { quote = ']'; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')') { depth--; if (depth === 0) parts.push(src.slice(start, i)); }
+      else if (ch === ',' && depth === 1) { parts.push(src.slice(start, i)); start = i + 1; }
+    }
+    re.lastIndex = i;
+    const columns = [];
+    let pk = null;
+    const fks = {};
+    for (const raw of parts) {
+      const part = raw.trim();
+      if (!part) continue;
+      if (/^(PRIMARY|FOREIGN|UNIQUE|KEY|INDEX|CONSTRAINT|CHECK|FULLTEXT|SPATIAL|EXCLUDE)\b/i.test(part)) {
+        const f = part.match(/FOREIGN\s+KEY\s*\(\s*([^)\s,]+)\s*\)\s*REFERENCES\s+([^\s(]+)\s*\(\s*([^)\s,]+)/i);
+        if (f) fks[cleanId(f[1])] = { table: cleanId(f[2]), column: cleanId(f[3]) };
+        const p = part.match(/PRIMARY\s+KEY[^(]*\(\s*([^),\s]+)/i);
+        if (p) pk = cleanId(p[1]);
+        continue;
+      }
+      const c = part.match(/^(`[^`]+`|"[^"]+"|\[[^\]]+\]|[\w$]+)\s+([\s\S]*)$/);
+      if (!c) continue;
+      const colName = cleanId(c[1]), rest = c[2];
+      const type = (rest.match(/^[\[\]"`\w]+(?:\s*\([^)]*\))?/) || [''])[0].replace(/[\[\]"`]/g, '');
+      columns.push({ name: colName, type });
+      if (/\bPRIMARY\s+KEY\b/i.test(rest)) pk = colName;
+      const r = rest.match(/\bREFERENCES\s+([^\s(]+)\s*\(\s*([^)\s,]+)/i);
+      if (r) fks[colName] = { table: cleanId(r[1]), column: cleanId(r[2]) };
+    }
+    for (const c of columns) if (fks[c.name]) c.fk = fks[c.name];
+    if (columns.length) tables[name] = { pk: pk || (columns.some(c => c.name === 'id') ? 'id' : columns[0].name), columns };
+  }
+  const alterRe = /ALTER\s+TABLE\s+(?:ONLY\s+)?(\S+)\s+ADD\s+(?:CONSTRAINT\s+\S+\s+)?FOREIGN\s+KEY\s*\(\s*([^)\s,]+)\s*\)\s*REFERENCES\s+([^\s(]+)\s*\(\s*([^)\s,]+)/gi;
+  while ((m = alterRe.exec(src))) {
+    const t = tables[cleanId(m[1])], col = t && t.columns.find(c => c.name === cleanId(m[2]));
+    if (col) col.fk = { table: cleanId(m[3]), column: cleanId(m[4]) };
+  }
+  return tables;
+}
+
+/* ---------- Rendering ---------- */
+const PII = /(^|_)(email|e_mail|phone|mobile|tel|national_id|citizen_id|id_card|passport|address|password|birth|birthday|dob)(_|$)/i;
+const $ = id => document.getElementById(id);
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function uid(s) { return String(s).replace(/[^\w-]/g, '_'); }
+
+function renderSource() {
+  const db = currentDb();
+  $('db-select').innerHTML = dbs.map(d => `<option value="${esc(d.id)}"${d.id === db.id ? ' selected' : ''}>${esc(d.name)} · ${ADAPTERS[d.engine].label} · ${Object.keys(d.tables).length} ตาราง${d.sample ? ' (ตัวอย่าง)' : ''}</option>`).join('');
+  $('remove-db').hidden = !!db.sample;
+}
+
+function setApiStatus(message) {
+  const status = $('api-status');
+  status.textContent = message;
+  status.hidden = !message;
+}
+
+async function loadCustomDbs() {
+  try {
+    const response = await fetch('/api/backend/schemas');
+    const schemas = await response.json();
+    if (!response.ok) throw new Error(schemas.error || response.statusText);
+    if (!Array.isArray(schemas)) throw new Error('รูปแบบรายการ schema จาก Go API ไม่ถูกต้อง');
+    dbs.push(...schemas);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setApiStatus(`เชื่อมต่อ Go API ไม่สำเร็จ: ${message} · ยังใช้ฐานตัวอย่างได้ แต่เพิ่ม/ลบฐานไม่ได้`);
+  }
+  loadDb('erp_demo');
+  renderAll();
+}
+
+const SEARCH_LIMIT = 100, GROUP_THRESHOLD = 40;
+function groupOf(t) { return singular(t.split('_')[0]); }
+
+/* Every word must match a table or column name. Table-name matches rank above column-only matches. */
+function searchTables(db, query) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean), out = [];
+  for (const [t, def] of Object.entries(db.tables)) {
+    const name = t.toLowerCase(), hits = new Set();
+    let score = 0, ok = true;
+    for (const w of words) {
+      if (name === w) score += 0;
+      else if (name.startsWith(w)) score += 1;
+      else if (name.includes(w)) score += 2;
+      else {
+        const cols = def.columns.filter(c => c.name.toLowerCase().includes(w));
+        if (!cols.length) { ok = false; break; }
+        cols.forEach(c => hits.add(c.name));
+        score += 10;
+      }
+    }
+    if (ok) out.push({ table: t, score, hits: [...hits] });
+  }
+  return out.sort((a, b) => a.score - b.score || a.table.length - b.table.length || a.table.localeCompare(b.table));
+}
+
+/* Tables one join away from the selection. Ones the selection points at come first because they keep one row per row. */
+function relatedTables(db) {
+  const found = new Map();
+  for (const e of findEdges(db)) {
+    const fromIn = state.order.includes(e.from), toIn = state.order.includes(e.to);
+    if (fromIn && !toIn && !(found.get(e.to) && found.get(e.to).rank === 0)) found.set(e.to, { rank: 0, via: e.from + '.' + e.fromCol });
+    if (toIn && !fromIn && !found.has(e.from)) found.set(e.from, { rank: 1, via: e.from + '.' + e.fromCol });
+  }
+  return [...found].map(([table, v]) => ({ table, ...v })).sort((a, b) => a.rank - b.rank || a.table.localeCompare(b.table));
+}
+
+function tableRow(db, t, detail) {
+  const on = state.order.includes(t), id = 'tbl-' + uid(t);
+  return `<label class="${on ? 'on' : ''}" for="${id}"><input type="checkbox" id="${id}" data-act="table" data-table="${esc(t)}"${on ? ' checked' : ''}><span class="rowtext"><span class="nm">${esc(t)}</span>${detail ? `<span class="hit">${esc(detail)}</span>` : ''}</span><span class="ct">${db.tables[t].columns.length}</span></label>`;
+}
+
+let topSearchResult = null;
+function renderTables() {
+  const db = currentDb(), q = state.search.trim(), names = Object.keys(db.tables), related = relatedTables(db);
+  topSearchResult = null;
+  const filters = [['all', 'ทั้งหมด', names.length], ['related', 'เกี่ยวข้อง', related.length], ['selected', 'เลือกแล้ว', state.order.length]];
+  $('table-filter').innerHTML = filters.map(([k, label, n]) => `<button type="button" id="filter-${k}" data-act="tfilter" data-filter="${k}" aria-pressed="${!q && state.tableFilter === k}">${label}<b>${n}</b></button>`).join('');
+
+  let html = '', hint = '';
+  if (q) {
+    const results = searchTables(db, q);
+    topSearchResult = results[0] ? results[0].table : null;
+    html = results.slice(0, SEARCH_LIMIT).map(r => tableRow(db, r.table, r.hits.length ? 'คอลัมน์: ' + r.hits.slice(0, 3).join(', ') + (r.hits.length > 3 ? ` +${r.hits.length - 3}` : '') : '')).join('');
+    hint = !results.length ? '' : results.length > SEARCH_LIMIT ? `แสดง ${SEARCH_LIMIT} จาก ${results.length} ตาราง พิมพ์เพิ่มเพื่อให้แคบลง` : `พบ ${results.length} ตาราง · กด Enter เพื่อเพิ่ม ${results[0].table}`;
+    if (!results.length) html = '<div class="empty" style="border:0;background:var(--surface)">ไม่พบตารางหรือคอลัมน์ที่ตรงกับคำค้น</div>';
+  } else if (state.tableFilter === 'selected') {
+    html = state.order.map(t => tableRow(db, t, t === state.base ? 'ตารางหลัก' : '')).join('') || '<div class="empty" style="border:0;background:var(--surface)">ยังไม่ได้เลือกตาราง</div>';
+  } else if (state.tableFilter === 'related') {
+    html = related.slice(0, SEARCH_LIMIT).map(r => tableRow(db, r.table, 'ผ่าน ' + r.via)).join('') || '<div class="empty" style="border:0;background:var(--surface)">เลือกตารางก่อน แล้วตารางที่เชื่อมกันได้จะแสดงที่นี่</div>';
+    if (related.length > SEARCH_LIMIT) hint = `แสดง ${SEARCH_LIMIT} จาก ${related.length} ตาราง`;
+  } else if (names.length <= GROUP_THRESHOLD) {
+    html = names.map(t => tableRow(db, t)).join('');
+  } else {
+    const groups = new Map();
+    for (const t of [...names].sort()) { const g = groupOf(t); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(t); }
+    const others = [];
+    for (const [g, list] of groups) if (list.length === 1) { others.push(list[0]); groups.delete(g); }
+    if (others.length) groups.set('อื่น ๆ', others);
+    html = [...groups].map(([g, list]) => {
+      const open = state.openGroups.has(g), picked = list.filter(t => state.order.includes(t)).length;
+      return `<button type="button" class="grp" id="grp-${uid(g)}" data-act="group" data-group="${esc(g)}" aria-expanded="${open}"><span class="arrow">${open ? '▼' : '▶'}</span><span class="gname">${esc(g)}</span>${picked ? `<span class="chip">${picked}</span>` : ''}<span class="ct">${list.length}</span></button>${open ? list.map(t => tableRow(db, t)).join('') : ''}`;
+    }).join('');
+    hint = `จัดกลุ่มจากคำแรกของชื่อตาราง ${groups.size} กลุ่ม`;
+  }
+  $('table-list').innerHTML = html;
+  $('table-hint').textContent = hint;
+  $('table-hint').hidden = !hint;
+}
+
+function renderJoin(t, res) {
+  const db = currentDb();
+  const j = res.joins.find(x => x.table === t), u = res.unresolved.find(x => x.table === t);
+  const others = state.order.filter(x => x !== t);
+  const leftVal = j ? j.leftTable + '.' + j.leftCol : '';
+  const rightVal = j ? j.rightCol : pkOf(db.tables[t]);
+  const leftOpts = `${j ? '' : '<option value="">เลือกคอลัมน์ที่จะเชื่อม</option>'}` + others.map(o => `<optgroup label="${esc(o)}">${db.tables[o].columns.map(c => `<option value="${esc(o + '.' + c.name)}"${leftVal === o + '.' + c.name ? ' selected' : ''}>${esc(o + '.' + c.name)}</option>`).join('')}</optgroup>`).join('');
+  const rightOpts = db.tables[t].columns.map(c => `<option value="${esc(c.name)}"${rightVal === c.name ? ' selected' : ''}>${esc(t + '.' + c.name)}</option>`).join('');
+  const type = j ? j.type : (state.joinTypes[t] || 'INNER');
+  const chips = [];
+  if (j) {
+    if (j.source === 'fk') chips.push('<span class="chip ok">จาก foreign key</span>');
+    if (j.source === 'guess') chips.push('<span class="chip warn">เดาจากชื่อคอลัมน์</span>');
+    if (j.source === 'custom') chips.push(`<span class="chip">กำหนดเอง</span> <button class="link" type="button" data-act="reset-join" data-table="${esc(t)}">ใช้ค่าที่ระบบเสนอ</button>`);
+    if (j.routes > 1) chips.push(`<span class="chip warn">เชื่อมได้ ${j.routes} ทาง</span>`);
+    if (j.fanOut) chips.push('<span class="chip warn">แถวอาจเพิ่มขึ้น</span>');
+  }
+  if (u) {
+    chips.push('<span class="chip err">ยังเชื่อมไม่ได้</span>');
+    if (u.bridge && u.bridge.length) chips.push(`<button class="btn small" type="button" data-act="bridge" data-tables="${esc(u.bridge.join(','))}">เพิ่ม ${esc(u.bridge.join(', '))} เพื่อเชื่อม</button>`);
+  }
+  return `<div class="join">
+    <div class="on-row">
+      <select id="jt-${uid(t)}" data-act="join-type" data-table="${esc(t)}" aria-label="ชนิด JOIN ของ ${esc(t)}">
+        <option value="INNER"${type === 'INNER' ? ' selected' : ''}>INNER JOIN</option>
+        <option value="LEFT"${type === 'LEFT' ? ' selected' : ''}>LEFT JOIN</option>
+      </select>
+      <span>ON</span>
+      <select id="jr-${uid(t)}" data-act="join-on" data-table="${esc(t)}" data-side="right" aria-label="คอลัมน์ของ ${esc(t)}">${rightOpts}</select>
+      <span>=</span>
+      <select id="jl-${uid(t)}" data-act="join-on" data-table="${esc(t)}" data-side="left" aria-label="คอลัมน์ที่เชื่อมกับ ${esc(t)}">${leftOpts}</select>
+    </div>
+    ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
+  </div>`;
+}
+
+function renderCards(res) {
+  const db = currentDb();
+  const totalCols = Object.values(state.cols).reduce((n, set) => n + set.size, 0);
+  $('card-tools').innerHTML = state.order.length ? `<span>${state.order.length} ตาราง · ${totalCols} คอลัมน์</span><button class="link" type="button" data-act="expand-all">ขยายทั้งหมด</button><button class="link" type="button" data-act="collapse-all">ย่อทั้งหมด</button>` : '';
+  if (!state.order.length) {
+    $('table-cards').innerHTML = '<div class="empty">ค้นหาหรือติ๊กตารางจากขั้นตอนที่ 1 แล้วคอลัมน์และ JOIN จะแสดงที่นี่</div>';
+    return;
+  }
+  const aliases = tableAliases(state.order), selected = selectedColumns(db);
+  $('table-cards').innerHTML = state.order.map(t => {
+    const def = db.tables[t], isBase = t === state.base, set = state.cols[t] || new Set();
+    const j = res.joins.find(x => x.table === t), unresolved = res.unresolved.some(x => x.table === t);
+    const open = unresolved || !state.collapsed.has(t);
+    const head = `<div class="thead">
+        <button class="toggle" type="button" id="toggle-${uid(t)}" data-act="toggle-card" data-table="${esc(t)}" aria-expanded="${open}"><span class="arrow">${open ? '▼' : '▶'}</span><span class="nm">${esc(t)}</span><span class="as">AS ${esc(aliases[t])}</span><span class="count">${set.size}/${def.columns.length} คอลัมน์</span></button>
+        <div class="tools">
+          ${isBase ? '<span class="chip base">ตารางหลัก (FROM)</span>' : `<button class="link" type="button" data-act="set-base" data-table="${esc(t)}">ตั้งเป็นตารางหลัก</button>`}
+          <button class="link" type="button" data-act="remove-table" data-table="${esc(t)}" aria-label="เอา ${esc(t)} ออก">เอาออก</button>
+        </div>
+      </div>`;
+    if (!open) {
+      const names = def.columns.filter(c => set.has(c.name)).map(c => c.name);
+      const flags = [];
+      if (j && j.source === 'guess') flags.push('<span class="chip warn">เดาจากชื่อคอลัมน์</span>');
+      if (j && j.routes > 1) flags.push(`<span class="chip warn">เชื่อมได้ ${j.routes} ทาง</span>`);
+      if (j && j.fanOut) flags.push('<span class="chip warn">แถวอาจเพิ่มขึ้น</span>');
+      return `<article class="tcard" id="card-${uid(t)}">${head}<div class="summary">
+        ${j ? `<div class="sql">${esc(j.type)} JOIN ON ${esc(t)}.${esc(j.rightCol)} = ${esc(j.leftTable)}.${esc(j.leftCol)}</div>` : ''}
+        ${flags.length ? `<div class="chips">${flags.join('')}</div>` : ''}
+        <div class="chips">${names.length ? names.slice(0, 8).map(n => `<span class="chip picked">${esc(n)}</span>`).join('') + (names.length > 8 ? `<span class="chip">+${names.length - 8}</span>` : '') : '<span class="chip">ใช้เป็นตารางเชื่อม ไม่ได้เลือกคอลัมน์</span>'}</div>
+      </div></article>`;
+    }
+    const soft = hasSoftDelete(db, t) ? `<label class="soft" for="soft-${uid(t)}"><input type="checkbox" id="soft-${uid(t)}" data-act="soft" data-table="${esc(t)}"${softActive(db, t) ? ' checked' : ''}><span>ไม่เอาแถวที่ถูกลบแล้ว (<code>deleted_at IS NULL</code>)</span></label>` : '';
+    const needle = (state.colSearch[t] || '').trim().toLowerCase();
+    const rows = def.columns.map(c => {
+      const on = set.has(c.name), key = t + '.' + c.name, sel = selected.find(x => x.table === t && x.column === c.name);
+      return `<div class="colrow" data-col-name="${esc(c.name.toLowerCase())}"${needle && !c.name.toLowerCase().includes(needle) ? ' hidden' : ''}>
+        <label for="col-${uid(key)}"><input type="checkbox" id="col-${uid(key)}" data-act="col" data-table="${esc(t)}" data-col="${esc(c.name)}"${on ? ' checked' : ''}><span class="cn">${esc(c.name)}</span><span class="ty">${esc(c.type)}</span>${PII.test(c.name) ? '<span class="chip warn">ข้อมูลส่วนบุคคล</span>' : ''}</label>
+        ${on ? `<input type="text" id="alias-${uid(key)}" data-act="alias" data-key="${esc(key)}" value="${esc(state.aliases[key] || '')}" placeholder="${esc(sel ? sel.auto : c.name)}" aria-label="ชื่อในผลลัพธ์ของ ${esc(key)}" spellcheck="false">` : '<span></span>'}
+      </div>`;
+    }).join('');
+    const long = def.columns.length > 10;
+    return `<article class="tcard" id="card-${uid(t)}">${head}
+      ${isBase ? '' : renderJoin(t, res)}
+      ${soft}
+      <div class="soft" style="justify-content:flex-end"><button class="link" type="button" data-act="all-cols" data-table="${esc(t)}">${set.size === def.columns.length ? 'ล้างคอลัมน์' : 'เลือกทุกคอลัมน์'}</button></div>
+      ${long ? `<div class="colfilter"><input type="search" id="colsearch-${uid(t)}" data-act="col-search" data-table="${esc(t)}" value="${esc(state.colSearch[t] || '')}" placeholder="กรองคอลัมน์ใน ${esc(t)}" aria-label="กรองคอลัมน์ใน ${esc(t)}" spellcheck="false"></div>` : ''}
+      <div class="cols${long ? ' long' : ''}">${rows}</div>
+    </article>`;
+  }).join('');
+}
+
+function highlight(sql) {
+  return esc(sql).replace(/&quot;/g, '"').replace(/(`[^`\n]*`|"[^"\n]*"|\[[^\]\n]*\])|\b(CREATE|OR|REPLACE|ALTER|VIEW|AS|SELECT|FROM|INNER|LEFT|JOIN|ON|AND|WHERE|IS|NULL)\b/g,
+    (m, id, kw) => id ? `<span class="i">${id}</span>` : `<span class="k">${kw}</span>`);
+}
+
+let lastSql = '';
+function renderOutput(res) {
+  const r = res || buildModel(), db = currentDb(), a = ADAPTERS[state.target];
+  $('targets').innerHTML = Object.entries(ADAPTERS).map(([k, v]) => `<button type="button" id="target-${k}" data-act="target" data-target="${k}" aria-pressed="${k === state.target}">${v.label}</button>`).join('');
+  $('code-label').textContent = `คำสั่งสำหรับ ${a.label}`;
+  const ok = r.model && !r.errors.length;
+  lastSql = ok ? renderSql(r.model, state.target) : '';
+  $('sql').innerHTML = ok ? highlight(lastSql) : '-- ยังสร้าง SQL ไม่ได้ ดูรายการที่ต้องแก้ด้านล่าง';
+  $('copy').disabled = !ok;
+  $('copy').textContent = 'คัดลอก SQL';
+
+  const items = [
+    ...r.errors.map(t => ['err', 'ต้องแก้', t]),
+    ...r.warnings.map(t => ['warn', 'ควรตรวจ', t]),
+  ];
+  if (db.engine !== state.target) items.push(['', 'ส่งออกข้ามระบบ', `ฐานกลางนี้เป็น ${ADAPTERS[db.engine].label} ปลายทาง ${a.label} ต้องมีตารางและคอลัมน์ชื่อเดียวกันอยู่แล้ว`]);
+  if (a.note) items.push(['', a.label, a.note]);
+  $('notes').innerHTML = items.map(([c, label, text]) => `<li><span class="chip ${c}">${esc(label)}</span><span>${text}</span></li>`).join('');
+  $('ir').textContent = r.model ? JSON.stringify(r.model, null, 2) : '{}';
+}
+
+function renderAll() {
+  const active = document.activeElement && document.activeElement.id;
+  const res = buildModel(), listTop = $('table-scroll').scrollTop, cardTop = $('table-cards').scrollTop;
+  renderSource();
+  renderTables();
+  renderCards(res);
+  $('view-name').value = state.viewName;
+  $('table-search').value = state.search;
+  renderOutput(res);
+  $('table-scroll').scrollTop = listTop;
+  $('table-cards').scrollTop = cardTop;
+  if (state.revealCard) {
+    const card = $('card-' + uid(state.revealCard));
+    if (card && matchMedia('(min-width: 1121px)').matches) card.scrollIntoView({ block: 'nearest' });
+    state.revealCard = null;
+  }
+  if (active && $(active) && document.activeElement !== $(active)) $(active).focus({ preventScroll: true });
+}
+
+/* ---------- Actions ---------- */
+function toggleTable(t, on) {
+  if (on) {
+    if (!state.order.includes(t)) state.order.push(t);
+    state.cols[t] = state.cols[t] || new Set();
+    if (!state.base) state.base = t;
+    state.collapsed.delete(t);
+    /* Keep the newest table open and fold the rest once the list gets long. */
+    if (state.order.length > 3) state.order.forEach(x => { if (x !== t) state.collapsed.add(x); });
+    state.revealCard = t;
+  } else {
+    state.order = state.order.filter(x => x !== t);
+    delete state.cols[t];
+    delete state.overrides[t];
+    delete state.colSearch[t];
+    state.collapsed.delete(t);
+    for (const k of Object.keys(state.aliases)) if (k.startsWith(t + '.')) delete state.aliases[k];
+    if (state.base === t) state.base = state.order[0] || null;
+  }
+}
+
+document.addEventListener('change', e => {
+  const el = e.target, act = el.dataset.act, t = el.dataset.table;
+  if (el.id === 'db-select') { loadDb(el.value); renderAll(); return; }
+  if (!act) return;
+  if (act === 'table') toggleTable(t, el.checked);
+  else if (act === 'col') {
+    const set = state.cols[t] = state.cols[t] || new Set();
+    if (el.checked) set.add(el.dataset.col); else { set.delete(el.dataset.col); delete state.aliases[t + '.' + el.dataset.col]; }
+  }
+  else if (act === 'soft') { if (el.checked) delete state.softOff[t]; else state.softOff[t] = true; }
+  else if (act === 'join-type') state.joinTypes[t] = el.value;
+  else if (act === 'join-on') {
+    const leftEl = $('jl-' + uid(t)), rightEl = $('jr-' + uid(t));
+    if (!leftEl.value) { renderAll(); return; }
+    const dot = leftEl.value.indexOf('.');
+    state.overrides[t] = { leftTable: leftEl.value.slice(0, dot), leftCol: leftEl.value.slice(dot + 1), rightCol: rightEl.value };
+  }
+  else if (act === 'alias') { /* handled on input; repaint placeholders on commit */ }
+  else return;
+  renderAll();
+});
+
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.id === 'view-name') { state.viewName = el.value; renderOutput(); }
+  else if (el.id === 'table-search') { state.search = el.value; renderTables(); $('table-scroll').scrollTop = 0; }
+  else if (el.dataset.act === 'col-search') {
+    state.colSearch[el.dataset.table] = el.value;
+    const needle = el.value.trim().toLowerCase();
+    el.closest('.tcard').querySelectorAll('.colrow').forEach(r => { r.hidden = !!needle && !r.dataset.colName.includes(needle); });
+  }
+  else if (el.dataset.act === 'alias') { state.aliases[el.dataset.key] = el.value; renderOutput(); }
+});
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
+  const act = el.dataset.act, t = el.dataset.table;
+  if (act === 'target') state.target = el.dataset.target;
+  else if (act === 'tfilter') { state.tableFilter = el.dataset.filter; state.search = ''; $('table-scroll').scrollTop = 0; }
+  else if (act === 'group') { const g = el.dataset.group; if (state.openGroups.has(g)) state.openGroups.delete(g); else state.openGroups.add(g); }
+  else if (act === 'toggle-card') { if (state.collapsed.has(t)) state.collapsed.delete(t); else state.collapsed.add(t); }
+  else if (act === 'expand-all') state.collapsed.clear();
+  else if (act === 'collapse-all') state.order.forEach(x => state.collapsed.add(x));
+  else if (act === 'remove-table') toggleTable(t, false);
+  else if (act === 'set-base') { state.base = t; delete state.overrides[t]; }
+  else if (act === 'reset-join') delete state.overrides[t];
+  else if (act === 'bridge') el.dataset.tables.split(',').forEach(x => toggleTable(x, true));
+  else if (act === 'all-cols') {
+    const cols = currentDb().tables[t].columns.map(c => c.name), set = state.cols[t] || new Set();
+    state.cols[t] = set.size === cols.length ? new Set() : new Set(cols);
+  }
+  else return;
+  renderAll();
+});
+
+document.addEventListener('keydown', e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (e.key === '/' && !typing && !$('add-dialog').open) { e.preventDefault(); $('table-search').focus(); $('table-search').select(); return; }
+  if (e.target.id !== 'table-search') return;
+  if (e.key === 'Escape') { state.search = ''; renderAll(); }
+  if (e.key === 'Enter' && topSearchResult) {
+    e.preventDefault();
+    if (!state.order.includes(topSearchResult)) toggleTable(topSearchResult, true);
+    state.search = '';
+    renderAll();
+  }
+});
+
+$('copy').addEventListener('click', () => {
+  const done = () => { $('copy').textContent = 'คัดลอกแล้ว'; };
+  const fallback = () => {
+    const range = document.createRange();
+    range.selectNodeContents($('sql'));
+    const s = getSelection(); s.removeAllRanges(); s.addRange(range);
+    $('copy').textContent = 'เลือกข้อความแล้ว กดคัดลอกได้เลย';
+  };
+  try { navigator.clipboard.writeText(lastSql).then(done, fallback); } catch (err) { fallback(); }
+});
+
+$('add-db').addEventListener('click', () => { $('add-error').hidden = true; $('add-dialog').showModal(); });
+$('add-cancel').addEventListener('click', () => $('add-dialog').close());
+$('add-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('add-name').value.trim(), ddl = $('add-ddl').value, tables = parseDDL(ddl), count = Object.keys(tables).length;
+  if (!count) {
+    $('add-error').textContent = 'ไม่พบคำสั่ง CREATE TABLE ที่อ่านได้ ตรวจว่าวางทั้งคำสั่งตั้งแต่ CREATE TABLE ถึงวงเล็บปิด';
+    $('add-error').hidden = false;
+    return;
+  }
+  const submit = $('add-form').querySelector('[type="submit"]');
+  submit.disabled = true;
+  $('add-error').hidden = true;
+  try {
+    const response = await fetch('/api/backend/schemas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, engine: $('add-engine').value, ddl }),
+    });
+    const schema = await response.json();
+    if (!response.ok) throw new Error(schema.error || response.statusText);
+    dbs.push(schema);
+    setApiStatus('');
+    $('add-dialog').close();
+    $('add-form').reset();
+    loadDb(schema.id);
+    renderAll();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    $('add-error').textContent = `บันทึก schema ไม่สำเร็จ: ${message}`;
+    $('add-error').hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+});
+$('remove-db').addEventListener('click', async () => {
+  const db = currentDb();
+  if (db.sample) return;
+  const button = $('remove-db');
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/backend/schemas/${encodeURIComponent(db.id)}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(body.error || response.statusText);
+    }
+    dbs.splice(dbs.indexOf(db), 1);
+    setApiStatus('');
+    loadDb(SAMPLE_DBS[0].id);
+    renderAll();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setApiStatus(`ลบ schema ไม่สำเร็จ: ${message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+loadCustomDbs();
+</script>
+</body>
+</html>

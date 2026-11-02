@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      API_ADDR: 0.0.0.0:8080
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN in .env}
+      DATA_DIR: /data
+    volumes:
+      - schema-data:/data
+    expose:
+      - "8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN:?Set CF_TUNNEL_TOKEN in .env}
+    depends_on:
+      - api
+
+volumes:
+  schema-data:
