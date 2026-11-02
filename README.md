@@ -81,6 +81,50 @@ connector URL, API token, and Cloudflare Access service token. Do not route a
 company deployment through a personal machine. For production, pin the
 Cloudflare Tunnel image to a reviewed version instead of using `latest`.
 
+## What Docker Compose runs
+
+[`compose.yaml`](./compose.yaml) starts two containers on a private Docker
+network:
+
+- **`api`** builds [`backend/Dockerfile`](./backend/Dockerfile) and runs the Go
+  API. It listens on `0.0.0.0:8080` inside the container so the tunnel
+  container can reach it. Compose uses `expose`, not `ports`, so port 8080 is
+  not published on the host or directly opened to the internet.
+- **`cloudflared`** runs the Cloudflare Tunnel using `CF_TUNNEL_TOKEN`. In the
+  Cloudflare Zero Trust dashboard, configure the tunnel's public hostname to
+  forward to `http://api:8080`; `api` is the Compose service name. The tunnel
+  makes an outbound connection from this machine, so no inbound router or
+  firewall port-forward is needed.
+- **`schema-data`** is a named Docker volume mounted at `/data` in the API
+  container. The Go API writes `schemas.json` there, so recreating the
+  container does not remove stored schema metadata.
+
+The API container requires `API_TOKEN`; Cloudflare Tunnel requires
+`CF_TUNNEL_TOKEN`. Compose reads these from `.env` in the project directory.
+Create it from the example and replace the placeholders before starting:
+
+```sh
+cp .env.example .env
+openssl rand -hex 32
+# Put the generated value in API_TOKEN, then add the tunnel token as CF_TUNNEL_TOKEN.
+```
+
+Keep `.env` private. Do not paste either value into source code, the browser, or
+Vercel's `NEXT_PUBLIC_*` environment variables. Set the same `API_TOKEN` value
+as Vercel's server-only `GO_API_TOKEN`.
+
+Useful Compose commands, run from the project root:
+
+```sh
+docker compose up -d --build  # Build and start the API and tunnel
+docker compose ps             # Check container status
+docker compose logs -f        # Follow API and tunnel logs
+docker compose down           # Stop containers; keep schema-data volume
+```
+
+`docker compose down -v` also removes the `schema-data` volume and its saved
+schemas. Only run it if you intend to delete that data.
+
 ## API configuration
 
 - `API_TOKEN`: required bearer token for Go API requests.
