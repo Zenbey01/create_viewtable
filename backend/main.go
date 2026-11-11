@@ -153,11 +153,12 @@ type introspectRequest struct {
 	Name             string `json:"name"`
 	Engine           string `json:"engine"`
 	ConnectionString string `json:"connectionString"`
+	Save             bool   `json:"save"` // keep the structure (never the credentials) like a pasted DDL
 }
 
 // introspect connects with a one-off connection string, reads table structure
-// and returns it. The connection string is never stored or logged, and the
-// resulting schema is not persisted.
+// and returns it. The connection string is never stored or logged. The schema
+// is persisted only when the request asks for it (save: true).
 func (a *API) introspect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
@@ -180,13 +181,23 @@ func (a *API) introspect(w http.ResponseWriter, r *http.Request) {
 	target, err := parseTarget(request.Engine, request.ConnectionString, allowedHosts(), os.Getenv("DB_ALLOW_INSECURE") == "1")
 	if err == nil {
 		var tables map[string]Table
-		if tables, err = Introspect(r.Context(), target); err == nil {
+		var schemaName string
+		if tables, schemaName, err = Introspect(r.Context(), target); err == nil {
 			id, idErr := newID()
 			if idErr != nil {
 				writeAPIError(w, http.StatusInternalServerError, "สร้างรหัสฐานข้อมูลไม่สำเร็จ")
 				return
 			}
-			writeJSON(w, http.StatusOK, Schema{ID: id, Name: request.Name, Engine: request.Engine, ViewName: "v_new_view", Tables: tables})
+			schema := Schema{ID: id, Name: request.Name, Engine: request.Engine, ViewName: "v_new_view",
+				Database: target.database, Schema: schemaName, Tables: tables}
+			if request.Save {
+				if err := a.store.Add(schema); err != nil {
+					log.Printf("persist schema: %v", err)
+					writeAPIError(w, http.StatusInternalServerError, "บันทึก schema ไม่สำเร็จ")
+					return
+				}
+			}
+			writeJSON(w, http.StatusOK, schema)
 			return
 		}
 	}

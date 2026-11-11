@@ -186,12 +186,12 @@ WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = current_schema()`
 
 // Introspect reads table structure only (fixed information_schema queries).
 // The connection is closed before returning and nothing is persisted.
-func Introspect(ctx context.Context, t dbTarget) (map[string]Table, error) {
+func Introspect(ctx context.Context, t dbTarget) (map[string]Table, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, introspectTimeout)
 	defer cancel()
 	db, err := t.open()
 	if err != nil {
-		return nil, userError("เชื่อมต่อฐานข้อมูลไม่สำเร็จ")
+		return nil, "", userError("เชื่อมต่อฐานข้อมูลไม่สำเร็จ")
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
@@ -200,11 +200,18 @@ func Introspect(ctx context.Context, t dbTarget) (map[string]Table, error) {
 	if err != nil {
 		var ue userError
 		if errors.As(err, &ue) {
-			return nil, err
+			return nil, "", err
 		}
-		return nil, userError("เชื่อมต่อหรืออ่านโครงสร้างฐานข้อมูลไม่สำเร็จ (ตรวจ host, รหัสผ่าน, TLS และสิทธิ์อ่าน information_schema)")
+		return nil, "", userError("เชื่อมต่อหรืออ่านโครงสร้างฐานข้อมูลไม่สำเร็จ (ตรวจ host, รหัสผ่าน, TLS และสิทธิ์อ่าน information_schema)")
 	}
-	return tables, nil
+	schema := ""
+	if t.engine == "sqlserver" {
+		// readTables only looks at the login's default schema, so every table lives in it.
+		if err := db.QueryRowContext(ctx, "SELECT SCHEMA_NAME()").Scan(&schema); err != nil {
+			return nil, "", userError("อ่านชื่อ schema ของ SQL Server ไม่สำเร็จ")
+		}
+	}
+	return tables, schema, nil
 }
 
 func readTables(ctx context.Context, db *sql.DB, engine string, q introspectQueries) (map[string]Table, error) {

@@ -29,6 +29,8 @@ type Schema struct {
 	Engine   string           `json:"engine"`
 	Sample   bool             `json:"sample,omitempty"`
 	ViewName string           `json:"viewName"`
+	Database string           `json:"database,omitempty"` // set when imported from a live connection
+	Schema   string           `json:"schema,omitempty"`   // SQL Server default schema, e.g. dbo
 	Tables   map[string]Table `json:"tables"`
 }
 
