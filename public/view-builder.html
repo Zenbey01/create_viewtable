@@ -99,6 +99,7 @@ input[type=search] { background: var(--surface-2); border-color: transparent; bo
 #view-name { font-family: var(--mono); width: 100%; }
 .codebox { background: var(--code-bg); border: 1px solid var(--code-line); border-radius: 6px; min-width: 0; }
 .codehead { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--code-line); color: var(--code-fg); font-size: 12px; }
+.codebtns { display: flex; gap: 6px; }
 .codehead .btn { background: transparent; border-color: var(--code-line); color: var(--code-fg); }
 .codehead .btn:hover { border-color: var(--code-key); color: var(--code-key); }
 pre#sql { margin: 0; padding: 12px; overflow: auto; max-height: min(52vh, 560px); color: var(--code-fg); font: 400 12.5px/1.6 var(--mono); white-space: pre; }
@@ -153,11 +154,13 @@ dialog textarea { width: 100%; min-height: 170px; font: 400 12px/1.5 var(--mono)
 .side .tscroll { max-height: none; }
 .connbox { display: grid; gap: 10px; }
 .connbox small { color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .tlist .empty { background: var(--surface); }
 pre#sql:empty { display: none; }
 .tlist, .tscroll, .tcard, .codebox { border-radius: 12px; }
 .tcard { box-shadow: 0 1px 2px rgba(20, 20, 30, .04); }
 .seg { border-radius: 10px; }
+.seg button[disabled] { opacity: .4; cursor: not-allowed; }
 dialog { border-radius: 16px; }
 @media (max-width: 1100px) {
   .app { grid-template-columns: 280px minmax(0, 1fr); }
@@ -217,7 +220,7 @@ dialog { border-radius: 16px; }
       <div class="seg" id="targets" role="group" aria-label="ฐานข้อมูลปลายทาง"></div>
     </div>
     <div class="codebox">
-      <div class="codehead"><span id="code-label"></span><button class="btn small" id="copy" type="button">คัดลอก SQL</button></div>
+      <div class="codehead"><span id="code-label"></span><span class="codebtns"><button class="btn small" id="download" type="button">ดาวน์โหลด .sql</button><button class="btn small" id="copy" type="button">คัดลอก SQL</button></span></div>
       <pre id="sql" tabindex="0"></pre>
     </div>
     <ul class="notes" id="notes"></ul>
@@ -234,9 +237,9 @@ dialog { border-radius: 16px; }
       </label>
       <label class="field" for="add-engine">ระบบฐานข้อมูล
         <select id="add-engine">
-          <option value="mysql">MySQL</option>
-          <option value="postgres">PostgreSQL</option>
-          <option value="sqlserver">SQL Server</option>
+          <option value="sqlserver" selected>SQL Server</option>
+          <option value="mysql" disabled>MySQL (เร็วๆ นี้)</option>
+          <option value="postgres" disabled>PostgreSQL (เร็วๆ นี้)</option>
         </select>
       </label>
     </div>
@@ -266,7 +269,8 @@ dialog { border-radius: 16px; }
           <input type="password" id="c-pass" autocomplete="new-password">
         </label>
       </div>
-      <small>ใช้บัญชี read-only ใช้ต่อครั้งเดียวแล้วทิ้ง ไม่เก็บและไม่บันทึก</small>
+      <label class="check"><input type="checkbox" id="c-save" checked> บันทึกโครงสร้างไว้ใช้ครั้งหน้า (ไม่เก็บรหัสผ่าน)</label>
+      <small>ใช้บัญชี read-only ระบบใช้รหัสผ่านต่อครั้งเดียวแล้วทิ้ง ไม่เก็บและไม่บันทึก</small>
     </div>
     <label class="field" for="add-ddl" id="ddl-field">โครงสร้างตาราง
       <textarea id="add-ddl" required spellcheck="false" placeholder="CREATE TABLE invoices (&#10;  id BIGINT PRIMARY KEY,&#10;  customer_id BIGINT,&#10;  amount DECIMAL(10,2),&#10;  FOREIGN KEY (customer_id) REFERENCES customers(id)&#10;);"></textarea>
@@ -280,6 +284,9 @@ dialog { border-radius: 16px; }
 </dialog>
 
 <script>
+/* Engines open for use right now. Add 'mysql' / 'postgres' here to enable them again (also the <option>s in the add dialog). */
+const ENABLED_ENGINES = new Set(['sqlserver']);
+
 /* ---------- Dialect adapters: add a database by adding an entry here ---------- */
 const ADAPTERS = {
   mysql: { label: 'MySQL', quote: n => '`' + n.replace(/`/g, '``') + '`', create: 'CREATE OR REPLACE VIEW', note: null },
@@ -291,12 +298,12 @@ const ADAPTERS = {
 
 /* ---------- State ---------- */
 const dbs = [];
-const state = { dbId: null, target: 'mysql', search: '', viewName: '', order: [], base: null, cols: {}, aliases: {}, joinTypes: {}, overrides: {}, softOff: {}, tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} };
+const state = { dbId: null, target: 'sqlserver', search: '', viewName: '', order: [], base: null, cols: {}, aliases: {}, joinTypes: {}, overrides: {}, softOff: {}, tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} };
 
 function currentDb() { return dbs.find(d => d.id === state.dbId) || dbs[0]; }
 function loadDb(id) {
   const db = dbs.find(d => d.id === id) || dbs[0];
-  Object.assign(state, { dbId: db ? db.id : null, target: db ? db.engine : 'mysql', search: '', viewName: (db && db.viewName) || 'v_new_view',
+  Object.assign(state, { dbId: db ? db.id : null, target: db && ENABLED_ENGINES.has(db.engine) ? db.engine : 'sqlserver', search: '', viewName: (db && db.viewName) || 'v_new_view',
     order: [], base: null, joinTypes: {}, aliases: {}, overrides: {}, softOff: {}, cols: {},
     tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} });
 }
@@ -439,23 +446,29 @@ function buildModel() {
     return { type: j.type, table: j.table, alias: aliases[j.table],
       left: { alias: aliases[j.leftTable], column: j.leftCol }, right: { alias: aliases[j.table], column: j.rightCol }, notDeleted: on };
   });
-  const model = { view: state.viewName.trim(), from: { table: state.base, alias: aliases[state.base] },
+  const model = { database: db.database || '', schema: db.schema || '', view: state.viewName.trim(), from: { table: state.base, alias: aliases[state.base] },
     columns: columns.map(c => ({ alias: aliases[c.table], column: c.column, as: c.as })), joins: modelJoins, notDeleted: where };
   return { model, errors, warnings, joins, unresolved };
 }
 
 function renderSql(model, key) {
   const a = ADAPTERS[key], q = a.quote, ref = (al, col) => `${q(al)}.${q(col)}`;
-  const lines = [`${a.create} ${q(model.view)} AS`, 'SELECT'];
+  /* SQL Server: qualify with the schema the structure was read from, so tables outside the login's default schema still resolve. */
+  const qn = n => key === 'sqlserver' && model.schema ? `${q(model.schema)}.${q(n)}` : q(n);
+  const lines = [];
+  if (key === 'sqlserver' && model.database) lines.push(`USE ${q(model.database)};`, 'GO', '');
+  lines.push(`${a.create} ${qn(model.view)} AS`, 'SELECT');
   model.columns.forEach((c, i) => lines.push(`  ${ref(c.alias, c.column)} AS ${q(c.as)}${i < model.columns.length - 1 ? ',' : ''}`));
-  lines.push(`FROM ${q(model.from.table)} AS ${q(model.from.alias)}`);
+  lines.push(`FROM ${qn(model.from.table)} AS ${q(model.from.alias)}`);
   for (const j of model.joins) {
-    lines.push(`${j.type} JOIN ${q(j.table)} AS ${q(j.alias)}`);
+    lines.push(`${j.type} JOIN ${qn(j.table)} AS ${q(j.alias)}`);
     lines.push(`  ON ${ref(j.right.alias, j.right.column)} = ${ref(j.left.alias, j.left.column)}`);
     for (const n of j.notDeleted) lines.push(`  AND ${ref(n.alias, n.column)} IS NULL`);
   }
   model.notDeleted.forEach((n, i) => lines.push(`${i ? '  AND' : 'WHERE'} ${ref(n.alias, n.column)} IS NULL`));
-  return lines.join('\n') + ';';
+  lines[lines.length - 1] += ';';
+  if (key === 'sqlserver') lines.push('GO');
+  return lines.join('\n');
 }
 
 /* ---------- DDL parser for "add a central database" ---------- */
@@ -535,6 +548,7 @@ function renderEmpty() {
   $('code-label').textContent = '';
   $('sql').textContent = '';
   $('copy').disabled = true;
+  $('download').disabled = true;
   $('notes').innerHTML = '';
   $('view-name').value = '';
 }
@@ -729,19 +743,20 @@ function renderCards(res) {
 }
 
 function highlight(sql) {
-  return esc(sql).replace(/&quot;/g, '"').replace(/(`[^`\n]*`|"[^"\n]*"|\[[^\]\n]*\])|\b(CREATE|OR|REPLACE|ALTER|VIEW|AS|SELECT|FROM|INNER|LEFT|JOIN|ON|AND|WHERE|IS|NULL)\b/g,
+  return esc(sql).replace(/&quot;/g, '"').replace(/(`[^`\n]*`|"[^"\n]*"|\[[^\]\n]*\])|\b(CREATE|OR|REPLACE|ALTER|VIEW|AS|SELECT|FROM|INNER|LEFT|JOIN|ON|AND|WHERE|IS|NULL|USE|GO)\b/g,
     (m, id, kw) => id ? `<span class="i">${id}</span>` : `<span class="k">${kw}</span>`);
 }
 
 let lastSql = '';
 function renderOutput(res) {
   const r = res || buildModel(), db = currentDb(), a = ADAPTERS[state.target];
-  $('targets').innerHTML = Object.entries(ADAPTERS).map(([k, v]) => `<button type="button" id="target-${k}" data-act="target" data-target="${k}" aria-pressed="${k === state.target}">${v.label}</button>`).join('');
+  $('targets').innerHTML = Object.entries(ADAPTERS).map(([k, v]) => `<button type="button" id="target-${k}" data-act="target" data-target="${k}" aria-pressed="${k === state.target}"${ENABLED_ENGINES.has(k) ? '' : ' disabled title="ยังไม่เปิดใช้งาน"'}>${v.label}</button>`).join('');
   $('code-label').textContent = `คำสั่งสำหรับ ${a.label}`;
   const ok = r.model && !r.errors.length;
   lastSql = ok ? renderSql(r.model, state.target) : '';
   $('sql').innerHTML = ok ? highlight(lastSql) : '-- ยังสร้าง SQL ไม่ได้ ดูรายการที่ต้องแก้ด้านล่าง';
   $('copy').disabled = !ok;
+  $('download').disabled = !ok;
   $('copy').textContent = 'คัดลอก SQL';
 
   const items = [
@@ -863,6 +878,16 @@ document.addEventListener('keydown', e => {
   }
 });
 
+$('download').addEventListener('click', () => {
+  if (!lastSql) return;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob(['\ufeff' + lastSql + '\n'], { type: 'text/plain;charset=utf-8' }));
+  link.download = (state.viewName.trim() || 'view').replace(/[^\w.-]+/g, '_') + '.sql';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
 $('copy').addEventListener('click', () => {
   const done = () => { $('copy').textContent = 'คัดลอกแล้ว'; };
   const fallback = () => {
@@ -909,13 +934,13 @@ $('add-form').addEventListener('submit', async e => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(conn
-        ? { name, engine: $('add-engine').value, connectionString: connectionString() }
+        ? { name, engine: $('add-engine').value, connectionString: connectionString(), save: $('c-save').checked }
         : { name, engine: $('add-engine').value, ddl }),
     });
     if (response.status === 401) { location.href = '/login'; return; }
     const schema = await response.json();
     if (!response.ok) throw new Error(schema.error || response.statusText);
-    if (conn) schema.session = true;
+    if (conn && !$('c-save').checked) schema.session = true;
     dbs.push(schema);
     setApiStatus('');
     $('add-dialog').close();

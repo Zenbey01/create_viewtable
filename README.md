@@ -42,11 +42,13 @@ credentials:
    before onboarding a customer. Do not use production customer data for these
    tests.
 
-The current handoff point is **step 1**: the scaffold is pushed, but no real
-customer database connection, end-user login, tenant isolation, or production
-storage has been implemented. Complete steps 1–3 before collecting customer
-schema metadata, and complete all steps before connecting to a customer
-database.
+Current state: the app has a shared-password login (`APP_PASSWORD`, a
+temporary measure until Microsoft sign-in replaces it), and the Go API can
+import a schema from a live **SQL Server** connection (MySQL/PostgreSQL code
+exists but is switched off in the UI). The connection is read-only,
+catalog-only, limited to `ALLOWED_DB_HOSTS`, and the password is never stored.
+There is still no per-user identity, tenant isolation, audit log, or production
+storage; complete steps 1–3 and 6 before onboarding a customer.
 
 ## Run locally
 
