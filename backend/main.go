@@ -69,6 +69,7 @@ func (a *API) handler() http.Handler {
 	})
 	mux.Handle("/api/schemas", a.requireToken(http.HandlerFunc(a.schemas)))
 	mux.Handle("/api/schemas/", a.requireToken(http.HandlerFunc(a.schemaByID)))
+	mux.Handle("/api/introspect", a.requireToken(http.HandlerFunc(a.introspect)))
 	return mux
 }
 
@@ -146,6 +147,66 @@ func (a *API) createSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, schema)
+}
+
+type introspectRequest struct {
+	Name             string `json:"name"`
+	Engine           string `json:"engine"`
+	ConnectionString string `json:"connectionString"`
+	Save             bool   `json:"save"` // keep the structure (never the credentials) like a pasted DDL
+}
+
+// introspect connects with a one-off connection string, reads table structure
+// and returns it. The connection string is never stored or logged. The schema
+// is persisted only when the request asks for it (save: true).
+func (a *API) introspect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeAPIError(w, http.StatusMethodNotAllowed, "รองรับเฉพาะ POST")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	var request introspectRequest
+	if err := decoder.Decode(&request); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "อ่านข้อมูลคำขอไม่สำเร็จ")
+		return
+	}
+	request.Name = strings.TrimSpace(request.Name)
+	if request.Name == "" {
+		writeAPIError(w, http.StatusBadRequest, "กรุณาระบุชื่อฐานข้อมูล")
+		return
+	}
+	target, err := parseTarget(request.Engine, request.ConnectionString, allowedHosts(), os.Getenv("DB_ALLOW_INSECURE") == "1")
+	if err == nil {
+		var tables map[string]Table
+		var schemaName string
+		if tables, schemaName, err = Introspect(r.Context(), target); err == nil {
+			id, idErr := newID()
+			if idErr != nil {
+				writeAPIError(w, http.StatusInternalServerError, "สร้างรหัสฐานข้อมูลไม่สำเร็จ")
+				return
+			}
+			schema := Schema{ID: id, Name: request.Name, Engine: request.Engine, ViewName: "v_new_view",
+				Database: target.database, Schema: schemaName, Tables: tables}
+			if request.Save {
+				if err := a.store.Add(schema); err != nil {
+					log.Printf("persist schema: %v", err)
+					writeAPIError(w, http.StatusInternalServerError, "บันทึก schema ไม่สำเร็จ")
+					return
+				}
+			}
+			writeJSON(w, http.StatusOK, schema)
+			return
+		}
+	}
+	var ue userError
+	if errors.As(err, &ue) {
+		writeAPIError(w, http.StatusBadRequest, ue.Error())
+		return
+	}
+	writeAPIError(w, http.StatusBadGateway, "เชื่อมต่อฐานข้อมูลไม่สำเร็จ")
 }
 
 func (a *API) schemaByID(w http.ResponseWriter, r *http.Request) {

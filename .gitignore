@@ -5,3 +5,6 @@ backend/data/
 .env
 .env.*
 !.env.example
+*.exe
+.next-e2e/
+tests/screenshots/
