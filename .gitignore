@@ -5,3 +5,4 @@ backend/data/
 .env
 .env.*
 !.env.example
+*.exe

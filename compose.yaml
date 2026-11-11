@@ -7,6 +7,10 @@ services:
       API_ADDR: 0.0.0.0:8080
       API_TOKEN: ${API_TOKEN:?Set API_TOKEN in .env}
       DATA_DIR: /data
+      # Comma-separated host or host:port the API may connect to. Empty = disabled.
+      ALLOWED_DB_HOSTS: ${ALLOWED_DB_HOSTS:-}
+      DB_ALLOW_INSECURE: ${DB_ALLOW_INSECURE:-0}
+      DB_TRUST_SERVER_CERT: ${DB_TRUST_SERVER_CERT:-0}
     volumes:
       - schema-data:/data
     expose:
