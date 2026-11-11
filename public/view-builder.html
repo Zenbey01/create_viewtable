@@ -7,56 +7,54 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Prompt:wght@400;500;600&display=swap">
 <style>
-/* Layout: a three-step workbench that reads left to right (tables, columns and joins, export), with the SQL always in view. */
+/* Layout: three zones. Sidebar (database + tables) | columns and joins | SQL output. */
 :root {
-  --bg: #eef3f5; --surface: #ffffff; --surface-2: #f5f8f9; --fg: #15232c; --muted: #566975; --line: #cfdae0;
-  --accent: #0b6580; --accent-soft: #dcedf2; --on-accent: #ffffff;
+  --bg: #f3f3f5; --surface: #ffffff; --surface-2: #f5f5f7; --fg: #1d1d21; --muted: #6a6a75; --line: #e6e6ea;
+  --accent: #c8102e; --accent-soft: #fdecef; --on-accent: #ffffff;
   --warn: #8f4e00; --warn-soft: #fbeedb; --err: #a82a2a; --err-soft: #fae3e1; --ok: #1b6f47; --ok-soft: #dff2e8;
-  --code-bg: #122029; --code-fg: #d8e6ec; --code-key: #7fd0e6; --code-id: #f2c98a; --code-line: #2a3c47;
-  --sans: "IBM Plex Sans Thai", "Noto Sans Thai", "Thonburi", system-ui, sans-serif;
+  --code-bg: #1e1e23; --code-fg: #e8e8ee; --code-key: #ff8fa0; --code-id: #f2c98a; --code-line: #34343c;
+  --sans: "Prompt", "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0f171c; --surface: #172229; --surface-2: #1d2a32; --fg: #e4edf1; --muted: #95a8b3; --line: #2d3e48;
-  --accent: #58c3df; --accent-soft: #173a46; --on-accent: #08242d;
-  --warn: #f1b866; --warn-soft: #3a2a12; --err: #f39a94; --err-soft: #3d1c1b; --ok: #71d6a1; --ok-soft: #14352a;
-  --code-bg: #0a1115; --code-fg: #d8e6ec; --code-key: #7fd0e6; --code-id: #f2c98a; --code-line: #24343e; color-scheme: dark;
-} }
-:root[data-theme="dark"] {
-  --bg: #0f171c; --surface: #172229; --surface-2: #1d2a32; --fg: #e4edf1; --muted: #95a8b3; --line: #2d3e48;
-  --accent: #58c3df; --accent-soft: #173a46; --on-accent: #08242d;
-  --warn: #f1b866; --warn-soft: #3a2a12; --err: #f39a94; --err-soft: #3d1c1b; --ok: #71d6a1; --ok-soft: #14352a;
-  --code-bg: #0a1115; --code-fg: #d8e6ec; --code-key: #7fd0e6; --code-id: #f2c98a; --code-line: #24343e; color-scheme: dark;
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font: 400 14px/1.55 var(--sans); }
-.wrap { max-width: 1500px; margin: 0 auto; padding-block: 18px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 14px/1.55 var(--sans); }
 button, select, input, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 code, .mono { font-family: var(--mono); }
+[hidden] { display: none !important; }
 
-.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
-.top h1 { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 600; }
-.top p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
-.top p.api-status { color: var(--err); }
-.source { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; min-width: 0; }
+.app { display: grid; grid-template-columns: 300px minmax(0, 1fr) minmax(380px, .85fr); min-height: 100vh; }
+.side { background: var(--surface); border-right: 1px solid var(--line); padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; position: sticky; top: 0; height: 100vh; min-height: 0; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo { width: 40px; height: 40px; border-radius: 12px; background: var(--accent); position: relative; flex: none; }
+.logo::after { content: ""; position: absolute; inset: 11px; border: 3px solid #fff; border-radius: 50%; }
+.brand b { display: block; font-size: 18px; line-height: 1.1; font-weight: 600; }
+.brand small { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+.zone { display: grid; gap: 10px; min-height: 0; align-content: start; }
+.zone.grow { flex: 1; grid-template-rows: auto auto auto minmax(0, 1fr) auto; align-content: stretch; }
+.zhead { margin: 0; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.step { font: 500 12px/20px var(--mono); width: 20px; height: 20px; text-align: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); flex: none; }
+.side-foot { margin-top: auto; }
+.content { padding: 20px 24px; min-width: 0; height: 100vh; overflow-y: auto; display: grid; align-content: start; gap: 14px; }
+.result { background: var(--surface); border-left: 1px solid var(--line); padding: 20px; height: 100vh; overflow-y: auto; display: grid; align-content: start; gap: 12px; min-width: 0; }
+.api-status { margin: 0; color: var(--err); font-size: 13px; }
+.dbrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.dbrow .btn { flex: 1 1 auto; }
+
 label.field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
-input[type=text], input[type=search], select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; max-width: 100%; color: var(--fg); }
-#db-select { width: min(380px, 100%); }
-.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 11px; cursor: pointer; }
+input[type=text], input[type=search], input[type=password], select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; max-width: 100%; color: var(--fg); }
+input[type=search] { background: var(--surface-2); border-color: transparent; border-radius: 12px; padding: 10px 14px; }
+#db-select { width: 100%; }
+.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 500; }
 .btn.primary:hover { color: var(--on-accent); filter: brightness(1.08); }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .btn.small { padding: 2px 8px; font-size: 12px; }
 .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; text-decoration: underline; }
-
-.bench { display: grid; gap: 16px; grid-template-columns: minmax(210px, .62fr) minmax(0, 1.25fr) minmax(0, 1.3fr); align-items: start; }
-.pane { min-width: 0; display: grid; gap: 10px; }
-.pane > h2 { margin: 0; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
-.step { font: 500 12px/20px var(--mono); width: 20px; height: 20px; text-align: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); flex: none; }
 
 .tlist { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .tlist label { display: flex; gap: 8px; align-items: center; padding: 7px 10px; background: var(--surface); cursor: pointer; min-width: 0; }
@@ -152,22 +150,24 @@ dialog textarea { width: 100%; min-height: 170px; font: 400 12px/1.5 var(--mono)
 .colfilter { padding: 7px 12px; border-bottom: 1px solid var(--line); }
 .colfilter input { width: 100%; font-size: 12.5px; padding: 4px 7px; }
 .cols.long { max-height: 330px; overflow-y: auto; }
-@media (min-width: 1121px) {
-  .bench { height: max(540px, calc(100vh - 128px)); align-items: stretch; }
-  .pane { min-height: 0; align-content: start; }
-  .pane.tables { grid-template-rows: auto auto auto minmax(0, 1fr) auto; align-content: stretch; }
-  .pane.tables .tscroll { max-height: none; }
-  .pane.cards { grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
-  .pane.cards .tcards { overflow-y: auto; min-height: 0; align-content: start; padding-right: 2px; }
-  .pane.out { overflow-y: auto; }
+.side .tscroll { max-height: none; }
+.connbox { display: grid; gap: 10px; }
+.connbox small { color: var(--muted); }
+.tlist .empty { background: var(--surface); }
+pre#sql:empty { display: none; }
+.tlist, .tscroll, .tcard, .codebox { border-radius: 12px; }
+.tcard { box-shadow: 0 1px 2px rgba(20, 20, 30, .04); }
+.seg { border-radius: 10px; }
+dialog { border-radius: 16px; }
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 280px minmax(0, 1fr); }
+  .result { grid-column: 1 / -1; height: auto; border-left: 0; border-top: 1px solid var(--line); }
 }
-@media (max-width: 720px) { .tscroll { max-height: 45vh; } }
-@media (max-width: 1120px) {
-  .bench { grid-template-columns: minmax(190px, .55fr) minmax(0, 1.45fr); }
-  .out { grid-column: 1 / -1; position: static; }
-}
-@media (max-width: 720px) {
-  .bench { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; height: auto; border-right: 0; }
+  .side .tscroll { max-height: 45vh; }
+  .content { height: auto; padding: 16px; }
   .row2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
@@ -175,66 +175,61 @@ dialog textarea { width: 100%; min-height: 170px; font: 400 12px/1.5 var(--mono)
 </head>
 <body>
 
-<div class="wrap">
-  <header class="top">
-    <div>
-      <h1>SQL View Builder</h1>
-      <p>ต้นแบบ: เลือกตารางและคอลัมน์ แล้วได้คำสั่งสร้าง view โดยไม่เชื่อมหรือรันอะไรบนฐานข้อมูลจริง</p>
-      <p class="api-status" id="api-status" role="status" aria-live="polite" hidden></p>
-    </div>
-    <div class="source">
-      <label class="field" for="db-select">ฐานกลาง
-        <select id="db-select"></select>
-      </label>
-      <button class="btn" id="add-db" type="button">+ เพิ่มฐานกลาง</button>
-      <button class="btn" id="remove-db" type="button" hidden>ลบฐานนี้</button>
-    </div>
-  </header>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><div><b>SQL View</b><small>BUILDER</small></div></div>
 
-  <main class="bench">
-    <section class="pane tables" aria-labelledby="h-tables">
-      <h2 id="h-tables"><span class="step">1</span>เลือกตาราง</h2>
-      <input type="search" id="table-search" placeholder="ค้นหาตารางหรือคอลัมน์ ( / )" aria-label="ค้นหาตารางหรือคอลัมน์" spellcheck="false">
+    <section class="zone" aria-labelledby="h-db">
+      <h2 class="zhead" id="h-db"><span class="step">1</span>ฐานข้อมูล</h2>
+      <select id="db-select" aria-label="ฐานกลาง"></select>
+      <div class="dbrow">
+        <button class="btn primary" id="add-db" type="button">+ เพิ่มฐานกลาง</button>
+        <button class="btn" id="remove-db" type="button" hidden>ลบฐานนี้</button>
+      </div>
+    </section>
+
+    <section class="zone grow" aria-labelledby="h-tables">
+      <h2 class="zhead" id="h-tables">ตาราง</h2>
+      <input type="search" id="table-search" placeholder="ค้นหาข้อมูล ( / )" aria-label="ค้นหาตารางหรือคอลัมน์" spellcheck="false">
       <div class="seg tfilter" id="table-filter" role="group" aria-label="ตารางที่แสดง"></div>
       <div class="tscroll" id="table-scroll"><div class="tlist" id="table-list"></div></div>
       <p class="hint" id="table-hint"></p>
     </section>
 
-    <section class="pane cards" aria-labelledby="h-cols">
-      <div class="panehead">
-        <h2 id="h-cols"><span class="step">2</span>เลือกคอลัมน์และตรวจ JOIN</h2>
-        <div class="cardtools" id="card-tools"></div>
-      </div>
-      <div class="tcards" id="table-cards"></div>
-    </section>
+    <div class="side-foot"><button class="btn" id="logout" type="button">ออกจากระบบ</button></div>
+  </aside>
 
-    <section class="pane out" aria-labelledby="h-out">
-      <h2 id="h-out"><span class="step">3</span>ส่งออก</h2>
-      <div class="exportbar">
-        <label class="field" for="view-name" style="flex: 1 1 180px">ชื่อ view
-          <input type="text" id="view-name" spellcheck="false">
-        </label>
-        <div class="seg" id="targets" role="group" aria-label="ฐานข้อมูลปลายทาง"></div>
-      </div>
-      <div class="codebox">
-        <div class="codehead"><span id="code-label"></span><button class="btn small" id="copy" type="button">คัดลอก SQL</button></div>
-        <pre id="sql" tabindex="0"></pre>
-      </div>
-      <ul class="notes" id="notes"></ul>
-      <details class="ir">
-        <summary>ดูโครงสร้างกลางที่ใช้แปลงเป็น SQL แต่ละฐาน</summary>
-        <pre id="ir"></pre>
-      </details>
-    </section>
+  <main class="content">
+    <p class="api-status" id="api-status" role="status" aria-live="polite" hidden></p>
+    <div class="panehead">
+      <h2 class="zhead" id="h-cols"><span class="step">2</span>คอลัมน์และ JOIN</h2>
+      <div class="cardtools" id="card-tools"></div>
+    </div>
+    <div class="tcards" id="table-cards"></div>
   </main>
+
+  <section class="result" aria-labelledby="h-out">
+    <h2 class="zhead" id="h-out"><span class="step">3</span>ส่งออก SQL</h2>
+    <div class="exportbar">
+      <label class="field" for="view-name" style="flex: 1 1 180px">ชื่อ view
+        <input type="text" id="view-name" spellcheck="false">
+      </label>
+      <div class="seg" id="targets" role="group" aria-label="ฐานข้อมูลปลายทาง"></div>
+    </div>
+    <div class="codebox">
+      <div class="codehead"><span id="code-label"></span><button class="btn small" id="copy" type="button">คัดลอก SQL</button></div>
+      <pre id="sql" tabindex="0"></pre>
+    </div>
+    <ul class="notes" id="notes"></ul>
+  </section>
 </div>
 
 <dialog id="add-dialog" aria-labelledby="add-title">
   <form id="add-form" method="dialog">
     <h2 id="add-title">เพิ่มฐานกลาง</h2>
-    <p>รับเฉพาะโครงสร้างตาราง วางคำสั่ง CREATE TABLE จากผลของ <code>mysqldump --no-data</code> หรือ <code>pg_dump --schema-only</code> ได้เลย ห้ามใส่รหัสผ่านหรือข้อมูลจริง schema ที่เพิ่มจะถูกจัดเก็บโดย Go API</p>
+    <p>รับเฉพาะโครงสร้างตาราง ไม่อ่านข้อมูลจริง</p>
     <div class="row2">
-      <label class="field" for="add-name">ชื่อฐาน
+      <label class="field" for="add-name">ชื่อที่แสดง
         <input type="text" id="add-name" required spellcheck="false" placeholder="เช่น module_finance">
       </label>
       <label class="field" for="add-engine">ระบบฐานข้อมูล
@@ -245,7 +240,35 @@ dialog textarea { width: 100%; min-height: 170px; font: 400 12px/1.5 var(--mono)
         </select>
       </label>
     </div>
-    <label class="field" for="add-ddl">โครงสร้างตาราง
+    <label class="field" for="add-mode">วิธีเพิ่ม
+      <select id="add-mode">
+        <option value="ddl">วาง CREATE TABLE (เก็บ schema ไว้ที่ Go API)</option>
+        <option value="conn">เชื่อมต่อฐานข้อมูล (อ่านโครงสร้างครั้งเดียว ไม่เก็บอะไร)</option>
+      </select>
+    </label>
+    <div id="conn-field" class="connbox" hidden>
+      <div class="row2">
+        <label class="field" for="c-host">ชื่อเซิร์ฟเวอร์
+          <input type="text" id="c-host" autocomplete="off" spellcheck="false" placeholder="เช่น db.internal">
+        </label>
+        <label class="field" for="c-port">พอร์ต (ไม่ใส่ = ค่าเริ่มต้น)
+          <input type="text" id="c-port" inputmode="numeric" autocomplete="off" placeholder="3306 / 5432 / 1433">
+        </label>
+      </div>
+      <label class="field" for="c-db">ชื่อฐานข้อมูล
+        <input type="text" id="c-db" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="row2">
+        <label class="field" for="c-user">ยูสเซอร์
+          <input type="text" id="c-user" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="field" for="c-pass">รหัสผ่าน
+          <input type="password" id="c-pass" autocomplete="new-password">
+        </label>
+      </div>
+      <small>ใช้บัญชี read-only ใช้ต่อครั้งเดียวแล้วทิ้ง ไม่เก็บและไม่บันทึก</small>
+    </div>
+    <label class="field" for="add-ddl" id="ddl-field">โครงสร้างตาราง
       <textarea id="add-ddl" required spellcheck="false" placeholder="CREATE TABLE invoices (&#10;  id BIGINT PRIMARY KEY,&#10;  customer_id BIGINT,&#10;  amount DECIMAL(10,2),&#10;  FOREIGN KEY (customer_id) REFERENCES customers(id)&#10;);"></textarea>
     </label>
     <div id="add-error" role="alert" hidden></div>
@@ -257,67 +280,6 @@ dialog textarea { width: 100%; min-height: 170px; font: 400 12px/1.5 var(--mono)
 </dialog>
 
 <script>
-/* ---------- Sample schemas (example data, not a real database) ---------- */
-function T(...defs) {
-  return { pk: 'id', columns: defs.map(d => {
-    const [left, fk] = d.split(' -> ');
-    const [name, ...type] = left.split(' ');
-    const col = { name, type: type.join(' ') };
-    if (fk) { const [table, column] = fk.split('.'); col.fk = { table, column }; }
-    return col;
-  }) };
-}
-const SAMPLE_DBS = [
-  { id: 'course_platform', name: 'course_platform', engine: 'mysql', sample: true, viewName: 'v_course_enrollments', tables: {
-    users: T('id bigint', 'name varchar(255)', 'email varchar(255)', 'phone varchar(20)', 'created_at timestamp', 'deleted_at timestamp'),
-    categories: T('id bigint', 'name varchar(120)'),
-    courses: T('id bigint', 'title varchar(255)', 'instructor_id bigint -> users.id', 'category_id bigint', 'price decimal(10,2)', 'published_at timestamp', 'deleted_at timestamp'),
-    lessons: T('id bigint', 'course_id bigint', 'title varchar(255)', 'position int'),
-    enrollments: T('id bigint', 'user_id bigint', 'course_id bigint', 'status varchar(20)', 'progress_percent tinyint', 'enrolled_at timestamp', 'deleted_at timestamp'),
-    lesson_progress: T('id bigint', 'enrollment_id bigint', 'lesson_id bigint', 'completed_at timestamp'),
-    payments: T('id bigint', 'enrollment_id bigint -> enrollments.id', 'amount decimal(10,2)', 'method varchar(20)', 'status varchar(20)', 'paid_at timestamp', 'deleted_at timestamp'),
-  } },
-  { id: 'office_hr', name: 'office_hr', engine: 'postgres', sample: true, viewName: 'v_leave_requests', tables: {
-    departments: T('id bigint', 'name text'),
-    employees: T('id bigint', 'full_name text', 'email text', 'department_id bigint -> departments.id', 'hired_on date'),
-    leave_requests: T('id bigint', 'employee_id bigint -> employees.id', 'leave_type text', 'start_date date', 'end_date date', 'status text'),
-  } },
-];
-/* Example schema with 247 generated tables, to exercise the page at the size of a real system. */
-function buildLargeDemo() {
-  const modules = ['course', 'user', 'payment', 'invoice', 'employee', 'customer', 'product', 'order', 'campaign', 'ticket', 'report', 'vendor', 'asset'];
-  const children = ['categories', 'items', 'logs', 'settings', 'attachments', 'comments', 'tags', 'approvals', 'histories', 'notes', 'reviews', 'templates', 'schedules', 'assignments', 'notifications', 'imports', 'exports', 'versions'];
-  const extras = {
-    users: ['email varchar(255)', 'phone varchar(20)'],
-    customers: ['email varchar(255)', 'phone varchar(20)'],
-    employees: ['email varchar(255)', 'user_id bigint'],
-    orders: ['customer_id bigint', 'product_id bigint', 'total_amount decimal(12,2)'],
-    invoices: ['order_id bigint', 'customer_id bigint', 'total_amount decimal(12,2)', 'due_date date'],
-    payments: ['invoice_id bigint -> invoices.id', 'amount decimal(12,2)', 'paid_at timestamp'],
-    tickets: ['customer_id bigint', 'employee_id bigint'],
-    courses: ['employee_id bigint', 'price decimal(10,2)'],
-  };
-  const tables = {};
-  modules.forEach(m => {
-    const root = m + 's';
-    tables[root] = T('id bigint', 'code varchar(40)', 'name varchar(255)', 'status varchar(20)', ...(extras[root] || []), 'created_at timestamp', 'updated_at timestamp', 'deleted_at timestamp');
-    children.forEach((c, i) => {
-      const owner = i % 3 === 0 && m !== 'user' ? ['user_id bigint'] : [];
-      tables[m + '_' + c] = T('id bigint', m + '_id bigint', 'title varchar(255)', 'status varchar(20)', 'note text', ...owner, 'created_at timestamp', 'deleted_at timestamp');
-    });
-  });
-  return { id: 'erp_demo', name: 'erp_demo', engine: 'mysql', sample: true, viewName: 'v_order_payments', tables };
-}
-SAMPLE_DBS.unshift(buildLargeDemo());
-const DEFAULT_SELECTIONS = {
-  erp_demo: { order: ['orders', 'customers', 'invoices', 'payments'], joinTypes: { invoices: 'LEFT', payments: 'LEFT' }, cols: {
-    orders: ['code', 'status', 'total_amount'], customers: ['name', 'email'], invoices: ['due_date', 'total_amount'], payments: ['amount', 'paid_at'] } },
-  course_platform: { order: ['enrollments', 'users', 'courses', 'payments'], joinTypes: { payments: 'LEFT' }, cols: {
-    enrollments: ['status', 'enrolled_at'], users: ['name', 'email'], courses: ['title'], payments: ['amount', 'status'] } },
-  office_hr: { order: ['leave_requests', 'employees', 'departments'], joinTypes: {}, cols: {
-    leave_requests: ['leave_type', 'start_date', 'end_date', 'status'], employees: ['full_name'], departments: ['name'] } },
-};
-
 /* ---------- Dialect adapters: add a database by adding an entry here ---------- */
 const ADAPTERS = {
   mysql: { label: 'MySQL', quote: n => '`' + n.replace(/`/g, '``') + '`', create: 'CREATE OR REPLACE VIEW', note: null },
@@ -328,17 +290,15 @@ const ADAPTERS = {
 };
 
 /* ---------- State ---------- */
-const dbs = [...SAMPLE_DBS];
-const state = { dbId: 'course_platform', target: 'mysql', search: '', viewName: '', order: [], base: null, cols: {}, aliases: {}, joinTypes: {}, overrides: {}, softOff: {}, tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} };
+const dbs = [];
+const state = { dbId: null, target: 'mysql', search: '', viewName: '', order: [], base: null, cols: {}, aliases: {}, joinTypes: {}, overrides: {}, softOff: {}, tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} };
 
 function currentDb() { return dbs.find(d => d.id === state.dbId) || dbs[0]; }
 function loadDb(id) {
   const db = dbs.find(d => d.id === id) || dbs[0];
-  const pick = DEFAULT_SELECTIONS[db.id] || { order: [], joinTypes: {}, cols: {} };
-  Object.assign(state, { dbId: db.id, target: db.engine, search: '', viewName: db.viewName || 'v_new_view',
-    order: [...pick.order], base: pick.order[0] || null, joinTypes: { ...pick.joinTypes }, aliases: {}, overrides: {}, softOff: {}, cols: {},
-    tableFilter: 'all', openGroups: new Set(), collapsed: new Set(pick.order.length > 3 ? pick.order.slice(2) : []), colSearch: {} });
-  for (const t of pick.order) state.cols[t] = new Set(pick.cols[t] || []);
+  Object.assign(state, { dbId: db ? db.id : null, target: db ? db.engine : 'mysql', search: '', viewName: (db && db.viewName) || 'v_new_view',
+    order: [], base: null, joinTypes: {}, aliases: {}, overrides: {}, softOff: {}, cols: {},
+    tableFilter: 'all', openGroups: new Set(), collapsed: new Set(), colSearch: {} });
 }
 
 /* ---------- Schema helpers ---------- */
@@ -558,8 +518,25 @@ function uid(s) { return String(s).replace(/[^\w-]/g, '_'); }
 
 function renderSource() {
   const db = currentDb();
-  $('db-select').innerHTML = dbs.map(d => `<option value="${esc(d.id)}"${d.id === db.id ? ' selected' : ''}>${esc(d.name)} · ${ADAPTERS[d.engine].label} · ${Object.keys(d.tables).length} ตาราง${d.sample ? ' (ตัวอย่าง)' : ''}</option>`).join('');
-  $('remove-db').hidden = !!db.sample;
+  $('db-select').disabled = !db;
+  $('remove-db').hidden = !db;
+  if (!db) { $('db-select').innerHTML = '<option>ยังไม่มีฐานข้อมูล</option>'; return; }
+  $('db-select').innerHTML = dbs.map(d => `<option value="${esc(d.id)}"${d.id === db.id ? ' selected' : ''}>${esc(d.name)} · ${ADAPTERS[d.engine].label} · ${Object.keys(d.tables).length} ตาราง${d.session ? ' (เฉพาะหน้านี้)' : ''}</option>`).join('');
+}
+
+function renderEmpty() {
+  renderSource();
+  $('table-filter').innerHTML = '';
+  $('table-list').innerHTML = '<div class="empty" style="border:0">กด “+ เพิ่มฐานกลาง” เพื่อเริ่มต้น</div>';
+  $('table-hint').hidden = true;
+  $('card-tools').innerHTML = '';
+  $('table-cards').innerHTML = '<div class="empty">ยังไม่มีข้อมูล</div>';
+  $('targets').innerHTML = '';
+  $('code-label').textContent = '';
+  $('sql').textContent = '';
+  $('copy').disabled = true;
+  $('notes').innerHTML = '';
+  $('view-name').value = '';
 }
 
 function setApiStatus(message) {
@@ -571,15 +548,16 @@ function setApiStatus(message) {
 async function loadCustomDbs() {
   try {
     const response = await fetch('/api/backend/schemas');
+    if (response.status === 401) { location.href = '/login'; return; }
     const schemas = await response.json();
     if (!response.ok) throw new Error(schemas.error || response.statusText);
     if (!Array.isArray(schemas)) throw new Error('รูปแบบรายการ schema จาก Go API ไม่ถูกต้อง');
     dbs.push(...schemas);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    setApiStatus(`เชื่อมต่อ Go API ไม่สำเร็จ: ${message} · ยังใช้ฐานตัวอย่างได้ แต่เพิ่ม/ลบฐานไม่ได้`);
+    setApiStatus(`เชื่อมต่อ Go API ไม่สำเร็จ: ${message}`);
   }
-  loadDb('erp_demo');
+  loadDb(dbs[0] && dbs[0].id);
   renderAll();
 }
 
@@ -703,7 +681,7 @@ function renderCards(res) {
   const totalCols = Object.values(state.cols).reduce((n, set) => n + set.size, 0);
   $('card-tools').innerHTML = state.order.length ? `<span>${state.order.length} ตาราง · ${totalCols} คอลัมน์</span><button class="link" type="button" data-act="expand-all">ขยายทั้งหมด</button><button class="link" type="button" data-act="collapse-all">ย่อทั้งหมด</button>` : '';
   if (!state.order.length) {
-    $('table-cards').innerHTML = '<div class="empty">ค้นหาหรือติ๊กตารางจากขั้นตอนที่ 1 แล้วคอลัมน์และ JOIN จะแสดงที่นี่</div>';
+    $('table-cards').innerHTML = '<div class="empty">เลือกตารางทางซ้าย คอลัมน์และ JOIN จะแสดงที่นี่</div>';
     return;
   }
   const aliases = tableAliases(state.order), selected = selectedColumns(db);
@@ -773,10 +751,10 @@ function renderOutput(res) {
   if (db.engine !== state.target) items.push(['', 'ส่งออกข้ามระบบ', `ฐานกลางนี้เป็น ${ADAPTERS[db.engine].label} ปลายทาง ${a.label} ต้องมีตารางและคอลัมน์ชื่อเดียวกันอยู่แล้ว`]);
   if (a.note) items.push(['', a.label, a.note]);
   $('notes').innerHTML = items.map(([c, label, text]) => `<li><span class="chip ${c}">${esc(label)}</span><span>${text}</span></li>`).join('');
-  $('ir').textContent = r.model ? JSON.stringify(r.model, null, 2) : '{}';
 }
 
 function renderAll() {
+  if (!currentDb()) { renderEmpty(); return; }
   const active = document.activeElement && document.activeElement.id;
   const res = buildModel(), listTop = $('table-scroll').scrollTop, cardTop = $('table-cards').scrollTop;
   renderSource();
@@ -898,10 +876,27 @@ $('copy').addEventListener('click', () => {
 
 $('add-db').addEventListener('click', () => { $('add-error').hidden = true; $('add-dialog').showModal(); });
 $('add-cancel').addEventListener('click', () => $('add-dialog').close());
+function connectionString() {
+  const e = encodeURIComponent, engine = $('add-engine').value, port = $('c-port').value.trim();
+  return `${engine}://${e($('c-user').value.trim())}:${e($('c-pass').value)}@${$('c-host').value.trim()}${port ? ':' + port : ''}/${e($('c-db').value.trim())}`;
+}
+function setAddMode() {
+  const conn = $('add-mode').value === 'conn';
+  $('conn-field').hidden = !conn;
+  $('ddl-field').hidden = conn;
+  $('add-ddl').required = !conn;
+  for (const id of ['c-host', 'c-db', 'c-user', 'c-pass']) $(id).required = conn;
+}
+$('add-mode').addEventListener('change', setAddMode);
+$('logout').addEventListener('click', async () => {
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/login';
+});
 $('add-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const name = $('add-name').value.trim(), ddl = $('add-ddl').value, tables = parseDDL(ddl), count = Object.keys(tables).length;
-  if (!count) {
+  const conn = $('add-mode').value === 'conn';
+  const name = $('add-name').value.trim(), ddl = $('add-ddl').value;
+  if (!conn && !Object.keys(parseDDL(ddl)).length) {
     $('add-error').textContent = 'ไม่พบคำสั่ง CREATE TABLE ที่อ่านได้ ตรวจว่าวางทั้งคำสั่งตั้งแต่ CREATE TABLE ถึงวงเล็บปิด';
     $('add-error').hidden = false;
     return;
@@ -910,41 +905,47 @@ $('add-form').addEventListener('submit', async e => {
   submit.disabled = true;
   $('add-error').hidden = true;
   try {
-    const response = await fetch('/api/backend/schemas', {
+    const response = await fetch(conn ? '/api/backend/introspect' : '/api/backend/schemas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, engine: $('add-engine').value, ddl }),
+      body: JSON.stringify(conn
+        ? { name, engine: $('add-engine').value, connectionString: connectionString() }
+        : { name, engine: $('add-engine').value, ddl }),
     });
+    if (response.status === 401) { location.href = '/login'; return; }
     const schema = await response.json();
     if (!response.ok) throw new Error(schema.error || response.statusText);
+    if (conn) schema.session = true;
     dbs.push(schema);
     setApiStatus('');
     $('add-dialog').close();
     $('add-form').reset();
+    setAddMode();
     loadDb(schema.id);
     renderAll();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    $('add-error').textContent = `บันทึก schema ไม่สำเร็จ: ${message}`;
+    $('add-error').textContent = `${conn ? 'อ่านโครงสร้างฐานไม่สำเร็จ' : 'บันทึก schema ไม่สำเร็จ'}: ${message}`;
     $('add-error').hidden = false;
   } finally {
+    $('c-pass').value = '';
     submit.disabled = false;
   }
 });
 $('remove-db').addEventListener('click', async () => {
   const db = currentDb();
-  if (db.sample) return;
+  if (!db) return;
   const button = $('remove-db');
   button.disabled = true;
   try {
-    const response = await fetch(`/api/backend/schemas/${encodeURIComponent(db.id)}`, { method: 'DELETE' });
+    const response = db.session ? { ok: true } : await fetch(`/api/backend/schemas/${encodeURIComponent(db.id)}`, { method: 'DELETE' });
     if (!response.ok) {
       const body = await response.json();
       throw new Error(body.error || response.statusText);
     }
     dbs.splice(dbs.indexOf(db), 1);
     setApiStatus('');
-    loadDb(SAMPLE_DBS[0].id);
+    loadDb(dbs[0] && dbs[0].id);
     renderAll();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

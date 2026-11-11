@@ -107,9 +107,18 @@ server and never send it to the browser.
    ```
 
    Do not prefix these with `NEXT_PUBLIC_`. Redeploy after setting them.
-8. Enable Vercel Deployment Protection or add application login before sharing
-   the site. Cloudflare Access on the connector protects the Go endpoint, but
-   does not authenticate users of the Vercel UI.
+8. Set `APP_PASSWORD` and `SESSION_SECRET` (`openssl rand -hex 32`) as Vercel
+   server-side variables. The app redirects every page and API call to
+   `/login` until the shared password is entered, and refuses to serve at all
+   if they are unset. Add Vercel Firewall rate limiting for a hard brute-force
+   limit (the built-in limiter is per server instance).
+9. Optional: to import a schema from a connection string, set
+   `ALLOWED_DB_HOSTS` (comma-separated `host` or `host:port`) in the
+   connector's `.env`. Empty means the feature is disabled. The Go API connects
+   once with TLS, reads only `information_schema` (MySQL/PostgreSQL), closes
+   the connection and returns the structure without storing or logging the
+   string. Use a read-only account. The password still travels browser →
+   Vercel → tunnel → Go API over TLS.
 
 The compose file publishes no host port and persists schema metadata in a
 Docker volume. One Vercel deployment points to one `GO_API_URL`. To use both a

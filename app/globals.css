@@ -20,3 +20,39 @@ body {
   height: 100dvh;
   border: 0;
 }
+
+.loginWrap {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  font-family: system-ui, sans-serif;
+}
+
+.loginCard {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.loginCard h1 {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+}
+
+.loginCard input,
+.loginCard button {
+  padding: 10px 12px;
+  font: inherit;
+  border: 1px solid #8887;
+  border-radius: 6px;
+}
+
+.loginCard button {
+  cursor: pointer;
+}
+
+.loginError {
+  margin: 0;
+  color: #c0392b;
+}
