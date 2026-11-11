@@ -26,7 +26,7 @@ const freePort = () => new Promise(res => {
 const kill = p => {
   if (!p || p.exitCode !== null) return;
   if (win) { try { execFileSync("taskkill", ["/PID", String(p.pid), "/T", "/F"], { stdio: "ignore" }); } catch {} }
-  else p.kill("SIGKILL");
+  else { try { process.kill(-p.pid, "SIGKILL"); } catch { p.kill("SIGKILL"); } } // whole group: next dev forks workers
 };
 const waitFor = async (url, ms) => {
   const end = Date.now() + ms;
@@ -37,7 +37,7 @@ const waitFor = async (url, ms) => {
   throw new Error(`timeout waiting for ${url}`);
 };
 const startGo = async () => {
-  go = spawn(goBin, [], { env: { ...process.env, API_ADDR: `127.0.0.1:${goPort}`, API_TOKEN: env.TOKEN, DATA_DIR: work, ALLOWED_DB_HOSTS: "" }, stdio: "ignore" });
+  go = spawn(goBin, [], { env: { ...process.env, API_ADDR: `127.0.0.1:${goPort}`, API_TOKEN: env.TOKEN, DATA_DIR: work, ALLOWED_DB_HOSTS: "" }, stdio: "ignore", detached: !win });
   procs.push(go);
   await waitFor(`http://127.0.0.1:${goPort}/healthz`, 15000);
 };
@@ -48,7 +48,7 @@ before(async () => {
   [goPort, webPort] = [await freePort(), await freePort()];
   await startGo();
   web = spawn(process.execPath, [join(root, "node_modules/next/dist/bin/next"), "dev", "-p", String(webPort)], {
-    cwd: root, stdio: "ignore",
+    cwd: root, stdio: "ignore", detached: !win,
     env: { ...process.env, NEXT_DIST_DIR: distDir, APP_PASSWORD: env.PASSWORD, SESSION_SECRET: env.SECRET,
       GO_API_URL: `http://127.0.0.1:${goPort}`, GO_API_TOKEN: env.TOKEN },
   });
